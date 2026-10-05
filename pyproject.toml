@@ -55,7 +55,7 @@ ignore-folders = [".agents/skills/lint-my-headers/evals/files"]
 build = ["uv>=0.12.20"]
 docs = ["zensical==0.0.67"]
 quality = [
-    "ruff==0.16.9",
+    "ruff==0.16.10",
     "ty==0.0.84",
     "prek==0.5.4",
 ]
