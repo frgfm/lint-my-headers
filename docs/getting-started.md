@@ -98,6 +98,9 @@ Checks are read-only. A valid Python header in 2026 looks like this:
 Bash uses the same `#` marker. Other supported languages use `//`, with the same
 text and blank lines. See [header layouts](configuration.md#header-layouts) for
 language-specific details. Missing headers require manual insertion and review.
+The [additional layouts](configuration.md#additional-layouts-unreleased) support
+common copyright lines, ordinary blocks, and SPDX pairs in the unreleased source
+checkout; they are not available in published 0.7.0.
 
 ## Refresh a stale year
 

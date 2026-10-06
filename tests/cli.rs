@@ -63,6 +63,117 @@ fn json_run(root: &Path, args: &[&str], exit: i32) -> Value {
 }
 
 #[test]
+fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs() {
+    let dir = workspace();
+    let root = dir.path();
+    write(
+        root,
+        "pyproject.toml",
+        format!(
+            "{CONFIG}languages = ['python', 'javascript', 'typescript', 'rust', 'go', 'swift', 'bash', 'c', 'cpp']\n"
+        ),
+    );
+    let mut originals = Vec::new();
+    for (extension, marker, body) in [
+        ("py", "#", "value = 'café'\n"),
+        ("js", "//", "const value = 'café';\n"),
+        ("ts", "//", "const value: string = 'café';\n"),
+        ("rs", "//", "const VALUE: &str = \"café\";\n"),
+        ("go", "//", "package example\nconst Value = \"café\"\n"),
+        ("swift", "//", "let value = \"café\"\n"),
+        ("sh", "#", "value='café'\n"),
+        ("c", "//", "const char *value = \"café\";\n"),
+        ("cpp", "//", "const char *value = \"café\";\n"),
+    ] {
+        let text = format!(
+            "SPDX-FileCopyrightText: {} {OWNER}\nSPDX-License-Identifier: Apache-2.0\n",
+            year() - 2
+        );
+        let mut layouts = vec![
+            text.lines()
+                .map(|line| format!("{marker} {line}\n"))
+                .collect::<String>(),
+        ];
+        if marker == "//" {
+            layouts.push(format!(
+                "/*\n{} */\n",
+                text.lines()
+                    .map(|line| format!(" * {line}\n"))
+                    .collect::<String>()
+            ));
+        }
+        for (index, layout) in layouts.into_iter().enumerate() {
+            let name = format!("src/layout_{index}.{extension}");
+            let contents = format!("\u{feff}{layout}\n{body}").replace('\n', "\r\n");
+            write(root, &name, &contents);
+            originals.push((name, contents));
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            root.join("src/layout_0.sh"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
+    let checked = json_run(root, &["check"], 1);
+    assert_eq!(checked["schema_version"], 1);
+    assert_eq!(checked["checked"], originals.len());
+    assert!(
+        checked["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["code"] == "LMH004" && d["fixable"] == true)
+    );
+    for (name, contents) in &originals {
+        assert_eq!(fs::read_to_string(root.join(name)).unwrap(), *contents);
+    }
+    let fixed = json_run(root, &["fix"], 0);
+    assert_eq!(fixed["changed"].as_array().unwrap().len(), originals.len());
+    for (name, contents) in originals {
+        let repaired = contents.replacen(
+            &(year() - 2).to_string(),
+            &format!("{}-{}", year() - 2, year()),
+            1,
+        );
+        assert_eq!(fs::read_to_string(root.join(name)).unwrap(), repaired);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(root.join("src/layout_0.sh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+    }
+    assert_eq!(json_run(root, &["check"], 0)["diagnostics"], json!([]));
+    assert_eq!(json_run(root, &["fix"], 0)["changed"], json!([]));
+
+    let linked = format!(
+        "# SPDX-FileCopyrightText: {} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n",
+        year() - 2
+    );
+    write(root, "src/linked.py", &linked);
+    fs::hard_link(root.join("src/linked.py"), root.join("src/alias.py")).unwrap();
+    let checked = json_run(root, &["check", "src/linked.py"], 1);
+    assert_eq!(checked["diagnostics"][0]["fixable"], false);
+    let fixed = json_run(root, &["fix", "src/linked.py"], 1);
+    assert_eq!(fixed["changed"], json!([]));
+    assert_eq!(fixed["diagnostics"][0]["code"], "LMH008");
+    assert_eq!(
+        fs::read_to_string(root.join("src/linked.py")).unwrap(),
+        linked
+    );
+}
+
+#[test]
 fn shell_selection_aliases_and_year_only_repairs_work_without_a_shell_runtime() {
     let dir = workspace();
     let root = dir.path();

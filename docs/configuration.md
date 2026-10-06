@@ -100,6 +100,60 @@ markers. Blank notices fail with exit 2 before source files are checked or repai
 Notice lines must match in full, including the final line when the notice file has
 no trailing newline.
 
+### Additional layouts (unreleased)
+
+!!! info "Source checkout only"
+
+    These layouts are supported by the unreleased source checkout. Published
+    version **0.7.0** uses the prose layout above. Build the reviewed source
+    revision to use these additions; the year-only repair rules still apply.
+
+Common prose copyright lines may use `Copyright`, `Copyright (C)`, or
+`Copyright (c)`, followed by one four-digit year or year range and the exact
+configured owner. A comma before the owner and a final period are optional.
+The license notice must still match the policy, with one blank line between it
+and the copyright. Commented blank lines such as `//` or ` *` are accepted.
+
+For languages that use `//`, an ordinary `/* ... */` block may contain the
+whole header. A leading `*` on each content line is optional. Python and Bash
+continue to use `#` comments. For example, with `owner = "Example Organization"`
+and `license = "Apache-2.0"`:
+
+```c
+/*
+ * Copyright 2024-2026 Example Organization
+ *
+ * This program is licensed under the Apache License 2.0.
+ * See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
+ */
+```
+
+An SPDX header may instead contain one `SPDX-FileCopyrightText` field and one
+`SPDX-License-Identifier` field. The owner must match exactly, and the identifier
+must match the configured `license`. Keep the local `LICENSE` file. The fields
+may appear in either order, with optional blank lines between them:
+
+```python
+# SPDX-FileCopyrightText: 2024-2026 Example Organization
+# SPDX-License-Identifier: Apache-2.0
+
+value = 1
+```
+
+The same pair works in `//` comments or an ordinary block. A prose copyright
+line with an SPDX license identifier is also accepted. A custom `license-notice`
+may declare the exact SPDX field instead; it does not enable expression parsing.
+Do not mix prose license text into the SPDX pair. Separate later line-comment
+notes from the pair with a blank line; an SPDX block contains only the pair and
+optional blank lines.
+
+Multiple copyright fields, duplicate license identifiers, nested legal blocks,
+documentation comments, and mixed or malformed declarations refuse repair.
+Multiple holders, omitted years, sidecar files, and `REUSE.toml` are outside this
+support. The `license` setting accepts one identifier; custom notices are matched
+as text, without evaluating compound expressions. Use REUSE for its full convention.
+LMH checks only the declared header policy and does not establish compliance.
+
 ??? note "Python"
     UTF-8 BOM, shebang, and PEP 263 cookie are preserved. Verified encodings:
     UTF-8, ASCII, Latin-1, and Windows-1252. Other codecs fail without repair.
@@ -133,7 +187,9 @@ no trailing newline.
 Validation stops at the first code line after allowed preambles and leading
 comments/blank lines. Later copyright notices and body syntax errors are ignored;
 the entire file must still decode successfully. Duplicate notices and
-copyright-bearing block/doc comments in the leading region refuse repair.
+copyright-bearing documentation comments in the leading region refuse repair.
+Published 0.7.0 also refuses copyright-bearing ordinary blocks; the unreleased
+layouts above support unambiguous ordinary blocks.
 Directory discovery skips symlinks and reparse points. Explicit linked
 files may be checked, but repairs refuse linked files/parents, multiple hard
 links, and concurrently changed targets.

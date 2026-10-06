@@ -172,6 +172,21 @@ REUSE compliance.
 See the [configuration guide](docs/configuration.md) for all options, language aliases,
 supported extensions, notice formats, and byte-preservation rules.
 
+## Additional header layouts (unreleased)
+
+The source checkout also accepts common `Copyright` lines, ordinary `/* ... */`
+headers, and SPDX copyright/license pairs. These layouts are not supported by
+the published **0.7.0** release. See the
+[header layout guide](docs/configuration.md#additional-layouts-unreleased) for
+examples and limits. Repairs still change only one recognized stale year.
+
+```c
+/*
+ * SPDX-FileCopyrightText: 2024-2026 Example Organization
+ * SPDX-License-Identifier: Apache-2.0
+ */
+```
+
 ## Agents and JSON
 
 Use the same CLI from scripts and coding agents:
