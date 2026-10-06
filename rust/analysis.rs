@@ -328,10 +328,11 @@ fn prose_license_count(text: &str) -> usize {
 }
 
 // Inspect only the leading comment region; the first code token ends header validation.
-fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &str)>, bool) {
+fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &str)>, bool, usize) {
     let mut remaining = source;
     let mut comments = Vec::new();
     let mut line = 0;
+    let mut identifiers = 0;
     loop {
         let trimmed = remaining.trim_start_matches([' ', '\t', '\x0c', '\r', '\n']);
         line += remaining[..remaining.len() - trimmed.len()]
@@ -346,6 +347,14 @@ fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &st
             let text = remaining[..end].trim_end_matches(['\r', '\n']);
             if !shebang {
                 let tail = &text[language.comment().len()..];
+                let field = if language.comment() == "//" {
+                    tail.trim_start_matches('/')
+                        .trim_start_matches('!')
+                        .trim_start()
+                } else {
+                    tail.trim_start()
+                };
+                identifiers += usize::from(field.starts_with("SPDX-License-Identifier:"));
                 if is_copyright(tail.trim_start())
                     || (language.comment() == "//"
                         && is_copyright(
@@ -376,15 +385,22 @@ fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &st
                     depth -= 1;
                     end += close + 2;
                 } else {
-                    return (source.len(), comments, true);
+                    return (source.len(), comments, true, identifiers);
                 }
             }
             if remaining[..end].contains("Copyright") {
                 comments.push((line, &remaining[..end]));
             }
+            identifiers += remaining[2..end - 2]
+                .lines()
+                .filter(|line| {
+                    line.trim_start_matches([' ', '\t', '/', '*', '!'])
+                        .starts_with("SPDX-License-Identifier:")
+                })
+                .count();
             end
         } else {
-            return (offset, comments, false);
+            return (offset, comments, false, identifiers);
         };
         line += remaining[..end].bytes().filter(|&b| b == b'\n').count();
         remaining = &remaining[end..];
@@ -447,7 +463,7 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
             );
         }
     };
-    let (end, comments, ambiguous_header) = leading_comments(&source, language);
+    let (end, comments, ambiguous_header, identifier_count) = leading_comments(&source, language);
     let source = &source[..end];
     let ambiguous_header = ambiguous_header
         || (matches!(language, Language::Javascript | Language::Typescript)
@@ -513,7 +529,6 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         .enumerate()
         .filter(|(_, line)| line.starts_with("SPDX-License-Identifier:"))
         .collect();
-    let identifier_count = source.matches("SPDX-License-Identifier:").count();
     let misplaced = (block && comments[0].0 != header_index)
         || (!block && comments[0].0 != header_index + copyright_index.unwrap_or_default())
         || (first_index != copyright_index && !spdx_first);
@@ -793,6 +808,14 @@ mod tests {
                         layouts.push(format!("/* {text}*/\n"));
                         layouts.push(format!("/*\n{} */\n", text.trim_end_matches('\n')));
                     }
+                    let notes = render_header(
+                        "Note: SPDX-License-Identifier: is a keyword; SPDX-License-Identifier: here is not a field.\n",
+                        language,
+                    );
+                    layouts = layouts
+                        .into_iter()
+                        .flat_map(|layout| [layout.clone(), format!("{layout}\n{notes}")])
+                        .collect();
                     for layout in layouts {
                         for preamble in ["", preamble] {
                             for newline in ["\n", "\r\n"] {
@@ -819,6 +842,20 @@ mod tests {
                     }
                 }
             }
+            let mut custom = policy.clone();
+            custom.license_notices = vec!["License notice mentions SPDX-License-Identifier: twice: SPDX-License-Identifier:.\n".into()];
+            let raw = render_header(
+                &format!(
+                    "Copyright 2024 Example Owner\n\n{}",
+                    custom.license_notices[0]
+                ),
+                language,
+            );
+            let result = analyze(raw.as_bytes(), &custom, path);
+            assert_eq!(
+                result.replacement.unwrap(),
+                raw.replacen("2024", "2024-2030", 1).as_bytes()
+            );
         }
     }
 
