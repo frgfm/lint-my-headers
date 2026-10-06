@@ -214,6 +214,17 @@ fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs(
                         .replace("# ", "")
                 ),
             ),
+            (
+                "src/prose_conflict.c",
+                format!(
+                    "/*\n{}*/ /* Licensed under the MIT License. */\nint value = 1;\n",
+                    header(years)
+                        .split("value =")
+                        .next()
+                        .unwrap()
+                        .replace("# ", "")
+                ),
+            ),
         ] {
             write(root, name, &contents);
             let checked = json_run(root, &["check", name], 1);

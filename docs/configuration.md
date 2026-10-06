@@ -144,6 +144,7 @@ value = 1
 The same pair works in `//` comments or an ordinary block. A prose copyright
 line with an SPDX license identifier is also accepted. A custom `license-notice`
 may declare the exact SPDX field instead; it does not enable expression parsing.
+Custom notices are checked in full, including any text after an SPDX tag.
 An existing prose header may also contain one SPDX identifier after its notice;
 both the full notice and the identifier must match the declared policy.
 Do not add prose license text to an SPDX-only pair. Separate later line-comment

@@ -328,11 +328,19 @@ fn prose_license_count(text: &str) -> usize {
 }
 
 // Inspect only the leading comment region; the first code token ends header validation.
-fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &str)>, bool, usize) {
+#[derive(Default)]
+struct LeadingComments<'a> {
+    end: usize,
+    copyrights: Vec<(usize, &'a str)>,
+    ambiguous: bool,
+    identifiers: usize,
+    prose_licenses: usize,
+}
+
+fn leading_comments(source: &str, language: Language) -> LeadingComments<'_> {
     let mut remaining = source;
-    let mut comments = Vec::new();
+    let mut result = LeadingComments::default();
     let mut line = 0;
-    let mut identifiers = 0;
     loop {
         let trimmed = remaining.trim_start_matches([' ', '\t', '\x0c', '\r', '\n']);
         line += remaining[..remaining.len() - trimmed.len()]
@@ -354,7 +362,8 @@ fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &st
                 } else {
                     tail.trim_start()
                 };
-                identifiers += usize::from(field.starts_with("SPDX-License-Identifier:"));
+                result.identifiers += usize::from(field.starts_with("SPDX-License-Identifier:"));
+                result.prose_licenses += prose_license_count(field);
                 if is_copyright(tail.trim_start())
                     || (language.comment() == "//"
                         && is_copyright(
@@ -363,7 +372,9 @@ fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &st
                                 .trim_start(),
                         ))
                 {
-                    comments.push((line, tail.strip_prefix(' ').unwrap_or(text)));
+                    result
+                        .copyrights
+                        .push((line, tail.strip_prefix(' ').unwrap_or(text)));
                 }
             }
             end
@@ -385,13 +396,17 @@ fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &st
                     depth -= 1;
                     end += close + 2;
                 } else {
-                    return (source.len(), comments, true, identifiers);
+                    result.end = source.len();
+                    result.ambiguous = true;
+                    return result;
                 }
             }
             if remaining[..end].contains("Copyright") {
-                comments.push((line, &remaining[..end]));
+                result.copyrights.push((line, &remaining[..end]));
             }
-            identifiers += remaining[2..end - 2]
+            let content = &remaining[2..end - 2];
+            result.prose_licenses += prose_license_count(content);
+            result.identifiers += content
                 .lines()
                 .filter(|line| {
                     line.trim_start_matches([' ', '\t', '/', '*', '!'])
@@ -400,7 +415,8 @@ fn leading_comments(source: &str, language: Language) -> (usize, Vec<(usize, &st
                 .count();
             end
         } else {
-            return (offset, comments, false, identifiers);
+            result.end = offset;
+            return result;
         };
         line += remaining[..end].bytes().filter(|&b| b == b'\n').count();
         remaining = &remaining[end..];
@@ -463,7 +479,13 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
             );
         }
     };
-    let (end, comments, ambiguous_header, identifier_count) = leading_comments(&source, language);
+    let LeadingComments {
+        end,
+        copyrights: comments,
+        ambiguous: ambiguous_header,
+        identifiers: identifier_count,
+        prose_licenses,
+    } = leading_comments(&source, language);
     let source = &source[..end];
     let ambiguous_header = ambiguous_header
         || (matches!(language, Language::Javascript | Language::Typescript)
@@ -588,10 +610,9 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
     let spdx = copyright_text.starts_with("SPDX-FileCopyrightText:") || !identifiers.is_empty();
     let notice_index = copyright_index + 2;
     let prose_notice = policy.license_notices.iter().find(|notice| {
-        if notice.starts_with("SPDX-License-Identifier:")
-            || !header
-                .get(copyright_index + 1)
-                .is_some_and(|line| line.trim_end_matches('\n').is_empty())
+        if !header
+            .get(copyright_index + 1)
+            .is_some_and(|line| line.trim_end_matches('\n').is_empty())
         {
             return false;
         }
@@ -608,10 +629,12 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         }
         expected.is_empty()
     });
-    if spdx
-        && prose_license_count(&source)
-            != prose_notice.map_or(0, |notice| prose_license_count(notice))
-    {
+    let complete_notice = prose_notice.filter(|notice| {
+        !notice.starts_with("SPDX-License-Identifier:") || notice.lines().count() > 1
+    });
+    let accepted_prose =
+        complete_notice.map_or(usize::from(!spdx), |notice| prose_license_count(notice));
+    if prose_licenses > accepted_prose {
         return problem(
             display_path,
             line_index + 1,
@@ -619,7 +642,8 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
             "mixed or ambiguous license declarations",
         );
     }
-    if let Some(&(identifier_index, _)) = identifiers.first().filter(|_| prose_notice.is_none()) {
+    if let Some(&(identifier_index, _)) = identifiers.first().filter(|_| complete_notice.is_none())
+    {
         let last_field = copyright_index.max(identifier_index);
         if header[first_index.expect("matched header")..=last_field]
             .iter()
@@ -661,7 +685,7 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
             && (policy.license_notices.iter().any(|notice| {
                 notice.starts_with("SPDX-License-Identifier:")
                     && notice.trim_end_matches('\n') == identifiers[0].1.trim_end_matches('\n')
-            }) || prose_notice.is_some_and(|notice| {
+            }) || complete_notice.is_some_and(|notice| {
                 notice
                     .lines()
                     .any(|line| line == identifiers[0].1.trim_end_matches('\n'))
@@ -856,6 +880,20 @@ mod tests {
                 result.replacement.unwrap(),
                 raw.replacen("2024", "2024-2030", 1).as_bytes()
             );
+            custom.license_notices =
+                vec!["SPDX-License-Identifier: Apache-2.0\nSee LICENSE for full terms.\n".into()];
+            let raw = render_header(
+                &format!(
+                    "Copyright 2024 Example Owner\n\n{}",
+                    custom.license_notices[0]
+                ),
+                language,
+            );
+            let result = analyze(raw.as_bytes(), &custom, path);
+            assert_eq!(
+                result.replacement.unwrap(),
+                raw.replacen("2024", "2024-2030", 1).as_bytes()
+            );
         }
     }
 
@@ -963,6 +1001,9 @@ mod tests {
                     format!("/*\n{text}"),
                     format!("{header}\n/* This program is licensed under the MIT License. */\n"),
                     format!("/*\n{text}*/\n// Licensed under the MIT License.\n"),
+                    "/*\nCopyright 2024 Example Owner\n\nLicense notice.\nLicensed under the MIT License.\n*/\n".to_string(),
+                    "/*\nCopyright 2024 Example Owner\n\nLicense notice.\n*/ /* Licensed under the MIT License. */\n".to_string(),
+                    format!("/*\n{} */ /* Licensed under the MIT License. */\n", text.trim_end_matches('\n')),
                 ] {
                     let result = analyze(raw.as_bytes(), &policy, path);
                     assert_eq!(result.diagnostic.unwrap().code, "LMH006", "{path}: {raw:?}");
