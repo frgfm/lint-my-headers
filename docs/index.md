@@ -59,12 +59,15 @@ The creation year, owner, and every other byte stay intact.
 
 ## Repair boundaries
 
-Repairs preserve the creation year, body bytes, and file mode. Ambiguous layouts,
-unsafe links, and concurrently changed targets are refused. Missing headers,
-wrong owners, malformed notices, and future years require manual review.
+Existing-header repairs preserve the creation year, body bytes, and file mode.
+Ambiguous layouts, unsafe links, and concurrently changed targets are refused.
+Missing headers without a creation year, wrong owners, malformed notices, and
+future years require manual review.
 
 Ownership and licensing always come from your declared policy. Lint My Headers
-does not insert missing headers or establish legal, SPDX, or REUSE compliance.
+does not establish legal, SPDX, or REUSE compliance. Published 0.7.0 does not
+insert missing headers. The unreleased source can
+[insert a missing header with a declared creation year](getting-started.md#insert-a-missing-header-unreleased).
 Both `lmh` and `lint-my-headers` expose the same commands, with no language
 toolchain or Node.js runtime needed by the installed native CLI.
 

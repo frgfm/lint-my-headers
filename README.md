@@ -125,8 +125,8 @@ A 2026 refresh produces a diff like this:
 +# Copyright (C) 2024-2026, Example Organization.
 ```
 
-Only the end year changes. `check` never writes source files. Missing headers and other
-findings stay available for manual review. See the
+Only the end year changes. `check` never writes source files. Without a declared
+creation year, missing headers stay available for manual review. See the
 [getting-started guide](docs/getting-started.md) for a complete header example.
 
 ## Benchmarks
@@ -156,6 +156,9 @@ does not supply this value. Without a creation year, missing headers stay
 unresolved. Existing legal text and unsafe targets require review. Insertion
 keeps source bytes, encoding, preambles, line endings, and file mode. Published
 0.7.0 does not include this feature.
+
+Insertion refuses files containing `copyright`, `©`, `SPDX`, `license`, or `licence`
+anywhere, including examples and variable names. Review those files manually.
 
 Keep the policy in the file your project already uses:
 

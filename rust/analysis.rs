@@ -525,13 +525,17 @@ fn block_header(comment: &str) -> Option<Vec<String>> {
 
 fn mentions_licensing(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
-    ["copyright", "spdx", "license", "licence"]
+    ["copyright", "©", "spdx", "license", "licence"]
         .iter()
         .any(|word| text.contains(word))
 }
 
 fn licensing_docstring(source: &str) -> bool {
     let source = source.trim_start();
+    // Parentheses, joined literals, and escapes can hide legal text. Leave these forms for review.
+    if source.starts_with('(') {
+        return true;
+    }
     let source = source.strip_prefix(['r', 'R', 'u', 'U']).unwrap_or(source);
     let bytes = source.as_bytes();
     let Some(&quote) = bytes.first().filter(|&&byte| matches!(byte, b'\'' | b'"')) else {
@@ -542,9 +546,12 @@ fn licensing_docstring(source: &str) -> bool {
     let mut index = width;
     while index < bytes.len() {
         if bytes[index] == b'\\' {
-            index += 2;
+            return true;
         } else if bytes[index..].starts_with(&delimiter[..width]) {
-            return mentions_licensing(&source[width..index]);
+            let tail = source[index + width..].trim_start();
+            let tail = tail.strip_prefix(['r', 'R', 'u', 'U']).unwrap_or(tail);
+            return mentions_licensing(&source[width..index])
+                || tail.starts_with(['\'', '"', '\\']);
         } else {
             index += 1;
         }
@@ -651,6 +658,9 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         identifiers: identifier_count,
         prose_licenses,
     } = leading_comments(&source, language);
+    // ponytail: a whole-file keyword guard can reject examples and variable names; use a parser only if these refusals become a problem.
+    let licensing_text =
+        policy.creation_year.is_some() && comments.is_empty() && mentions_licensing(&source);
     let licensing_literal = policy.creation_year.is_some()
         && comments.is_empty()
         && language == Language::Python
@@ -689,7 +699,7 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         if policy.creation_year.is_some()
             && !bare_cr
             && !licensing_literal
-            && !mentions_licensing(&source)
+            && !licensing_text
             && let Some(edit) =
                 missing_header_edit(raw, policy, language, header_index, separator_valid)
         {
@@ -1049,13 +1059,34 @@ mod tests {
         insertion.creation_year = Some(2024);
         for (path, raw) in [
             ("file.py", "# copyright 2024 Other Owner\nvalue = 1\n"),
+            ("file.py", "# © 2024 Other Owner\nvalue = 1\n"),
             ("file.py", "# SPDX-License-Identifier: MIT\nvalue = 1\n"),
+            ("file.py", "value = 1\n# Copyright 2024 Other Owner\n"),
+            (
+                "file.py",
+                "f\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
+            ),
+            (
+                "file.py",
+                "b\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
+            ),
             (
                 "file.py",
                 "\"\"\"Copyright 2024 Other Owner.\"\"\"\nvalue = 1\n",
             ),
             ("file.py", "r'''Existing licence text.'''\nvalue = 1\n"),
+            ("file.py", "(\"Copyright 2024 Other Owner\")\nvalue = 1\n"),
+            (
+                "file.py",
+                "\"Copy\" \"right 2024 Other Owner\"\nvalue = 1\n",
+            ),
+            ("file.py", "\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n"),
+            (
+                "file.py",
+                "\"Copy\" \\\n\"right 2024 Other Owner\"\nvalue = 1\n",
+            ),
             ("file.c", "/* Licensed to Other Owner. */\nint value = 1;\n"),
+            ("file.rs", "#![no_std]\n// Copyright 2024 Other Owner\n"),
             ("file.cpp", "/* unfinished\nint value = 1;\n"),
         ] {
             let result = analyze(raw.as_bytes(), &insertion, path);
@@ -1071,6 +1102,12 @@ mod tests {
             );
         }
         insertion.creation_year = Some(2024);
+        let ordinary = b"\"\"\"A useful module.\"\"\"\nvalue = 1\n";
+        assert!(
+            analyze(ordinary, &insertion, "file.py")
+                .replacement
+                .is_some()
+        );
         insertion.owner.push('\0');
         assert!(
             analyze(b"value = 1\n", &insertion, "file.py")

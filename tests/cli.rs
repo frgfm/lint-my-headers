@@ -242,6 +242,59 @@ fn missing_header_insertion_refuses_links_and_keeps_other_owners() {
 }
 
 #[test]
+fn missing_header_insertion_keeps_existing_legal_text_and_unsupported_docstrings_unchanged() {
+    let dir = workspace();
+    let root = dir.path();
+    write(
+        root,
+        "pyproject.toml",
+        format!("{CONFIG}creation-year = {}\n", year()),
+    );
+    let originals = [
+        (
+            "parenthesized.py",
+            "(\"Copyright 2024 Other Owner\")\nvalue = 1\n",
+        ),
+        (
+            "joined.py",
+            "\"Copy\" \"right 2024 Other Owner\"\nvalue = 1\n",
+        ),
+        (
+            "escaped.py",
+            "\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+        ),
+        ("later.py", "value = 1\n# Copyright 2024 Other Owner\n"),
+        ("symbol.py", "# © 2024 Other Owner\nvalue = 1\n"),
+        (
+            "attribute.rs",
+            "#![no_std]\n// Copyright 2024 Other Owner\n",
+        ),
+        (
+            "literal.py",
+            "f\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
+        ),
+    ];
+    for (name, body) in originals {
+        write(root, &format!("src/{name}"), body);
+    }
+    let fixed = json_run(root, &["fix"], 1);
+    assert_eq!(fixed["changed"], json!([]));
+    assert!(
+        fixed["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| { d["code"] == "LMH001" && d["fixable"] == false })
+    );
+    for (name, body) in originals {
+        assert_eq!(
+            fs::read_to_string(root.join("src").join(name)).unwrap(),
+            body
+        );
+    }
+}
+
+#[test]
 fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs() {
     let dir = workspace();
     let root = dir.path();

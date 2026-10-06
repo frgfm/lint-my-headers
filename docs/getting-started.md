@@ -136,8 +136,13 @@ effect. Without this declaration, `fix` keeps `LMH001` unresolved.
 
 Insertion keeps the original bytes, encoding, line endings, preambles, and mode.
 Existing legal declarations, ambiguous layouts, and notices that cannot be
-encoded in the file remain unfixable. Existing headers still use the limited
-end-year repair. This feature is not in published 0.7.0.
+encoded in the file remain unfixable. Python files that start with parentheses,
+or with joined or escaped strings, also require review. Existing headers still
+use the limited end-year repair. This feature is not in published 0.7.0.
+
+Insertion refuses any file that contains `copyright`, `©`, `SPDX`, `license`, or
+`licence`, regardless of case or position. Examples and variable names can also
+trigger this guard; review those files and add the header manually.
 
 | Exit code | Meaning |
 | --- | --- |
