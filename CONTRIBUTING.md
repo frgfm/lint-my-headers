@@ -153,7 +153,14 @@ serves assets only below `/lint-my-headers/`. Future projects can use more-speci
 which take precedence over the
 [Custom Domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
 Coordinate hostname-level settings when adding projects. Wrangler disables
-`workers.dev` and version-preview URLs to keep a single public canonical origin.
+production `workers.dev` and version URLs. Pull requests use separate Worker
+Previews.
+
+Enable **Preview Builds** under the Worker's **Settings > Build > Branch control**.
+Use the same build command as production and set the Preview command to
+`npx --yes wrangler@4.147.0 preview`. The empty `[previews]` block in
+`wrangler.toml` enables Previews, which use the assets built from each branch.
+Cloudflare posts the Preview link on the GitHub pull request.
 
 For local Cloudflare routing checks after `make docs-cloudflare`, use Node 22+
 and the Wrangler version pinned in the workflow:
