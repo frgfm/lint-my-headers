@@ -1,6 +1,6 @@
 [project]
 site_name = "Lint My Headers"
-site_description = "Check source copyright and license headers, safely refresh stale years, and integrate Lint My Headers with CI and coding agents."
+site_description = "Check source copyright and license headers across nine languages, safely refresh stale years, and integrate Lint My Headers with CI and coding agents."
 site_url = "https://docs.fgfm.dev/lint-my-headers/"
 repo_url = "https://github.com/frgfm/lint-my-headers"
 repo_name = "frgfm/lint-my-headers"
@@ -8,6 +8,7 @@ edit_uri = "edit/main/docs/"
 extra_css = ["stylesheets/fonts.css"]
 nav = [
   { "Overview" = "index.md" },
+  { "Compare header tools" = "comparison.md" },
   { "Getting started" = "getting-started.md" },
   { "Configuration" = "configuration.md" },
   { "Integrations" = "integrations.md" },
