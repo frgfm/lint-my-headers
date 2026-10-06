@@ -162,6 +162,14 @@ Use the same build command as production and set the Preview command to
 `wrangler.toml` enables Previews, which use the assets built from each branch.
 Cloudflare posts the Preview link on the GitHub pull request.
 
+Append this step after `make docs-cloudflare` in the Preview build command:
+
+```shell
+printf '%s\n' '/ /lint-my-headers/ 302' > .docs-site/_redirects
+```
+
+It redirects the Preview's root URL to the project docs.
+
 For local Cloudflare routing checks after `make docs-cloudflare`, use Node 22+
 and the Wrangler version pinned in the workflow:
 
