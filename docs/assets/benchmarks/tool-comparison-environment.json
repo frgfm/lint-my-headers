@@ -1,5 +1,5 @@
 {
-  "recorded_utc": "2026-10-06T15:34:25.865646+00:00",
+  "recorded_utc": "2026-10-06T16:27:54.476716+00:00",
   "platform": "macOS-15.7.7-arm64-arm-64bit",
   "machine": "arm64",
   "python": "3.11.13",
@@ -9,7 +9,7 @@
   "source_language": "Python",
   "current_year": 2026,
   "owner": "Benchmark",
-  "harness_sha256": "4ea55cf0e1729f63b8465d7f7c71439c57949461ae798d0e759e109c54d54741",
+  "harness_sha256": "135252871c1035987fa5cd845e50069072561f93f66c3874368825b6fa8de761",
   "bytes_per_file": 1024,
   "clock": "perf_counter_ns; process launch through completion",
   "rss": "separate OS time invocations; maximum process RSS, not summed process-tree RSS",
@@ -63,8 +63,7 @@
     "nwa": "59baf69981529728a1c6ffe45e520fd7aaf4f28443a7202f4f0cc4eabe61d848",
     "reuse": "797adb8484152b70493ebbe3b895a7979b2b85288fc14cf429233b021e7c6bf3"
   },
-  "published_harness_sha256": "233f42ea291c2ae695bab428eeb7e824e0f127b07ed4e0f1b3d198a3ffd2d3f0",
-  "harness_note": "Measured before comment-only Ruff pragma syntax normalization.",
+  "published_harness_sha256": "135252871c1035987fa5cd845e50069072561f93f66c3874368825b6fa8de761",
   "cpu": "Apple M3 Pro",
   "memory_bytes": 38654705664,
   "filesystem": "apfs",

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 # Copyright (C) 2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
@@ -132,6 +133,152 @@ def hashes(paths: list[Path]) -> list[str]:
     return [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths]
 
 
+def probe_headers(
+    work: Path, tools: dict[str, str], year: int, license_file: Path, output: Path
+) -> tuple[dict[str, bytes], dict[str, list[str]]]:
+    probes, templates, commands = [], {}, {}
+    for tool in CHECKERS:
+        fixture = work / tool
+        fixture.mkdir()
+        template, command = configure(tool, tools[tool], fixture, year, license_file)
+        templates[tool], commands[tool] = template, command
+        source = fixture / "src" / "0" / "file0.py"
+        states = {
+            "clean": template,
+            "missing": BODY,
+            "wrong_owner": template.replace(b"Benchmark", b"OtherOwner"),
+            "stale_year": template.replace(str(year).encode(), str(year - 1).encode(), 1),
+        }
+        for state, content in states.items():
+            source.write_bytes(content)
+            before = source.read_bytes()
+            status, _, _, text = invoke(command, fixture, output / "probe.log")
+            if source.read_bytes() != before:
+                raise RuntimeError(f"{tool} check wrote source bytes")
+            probes.append({"tool": tool, "case": state, "exit": status})
+            if state == "clean" and status != 0:
+                raise RuntimeError(f"{tool} rejects its clean fixture: {text}")
+            if state == "missing" and status == 0:
+                raise RuntimeError(f"{tool} skipped a selected source: {text}")
+        source.write_bytes(template)
+        (output / f"{tool}-header.txt").write_bytes(template.split(BODY)[0])
+        print(f"Validated {tool}", flush=True)
+    (output / "feature-probes.json").write_text(json.dumps(probes, indent=2) + "\n")
+    return templates, commands
+
+
+def prepare_sources(
+    work: Path,
+    templates: dict[str, bytes],
+    commands: dict[str, list[str]],
+    count: int,
+    bytes_per_file: int,
+    output: Path,
+) -> tuple[dict[str, list[str]], dict[str, list[Path]]]:
+    expected, paths_by_tool = {}, {}
+    for tool in CHECKERS:
+        fixture = work / tool
+        shutil.rmtree(fixture / "src")
+        template = templates[tool]
+        if len(template) > bytes_per_file:
+            raise RuntimeError(f"Increase --bytes; {tool} header is too large")
+        content = template + b"\n" * (bytes_per_file - len(template))
+        paths = []
+        for index in range(count):
+            path = fixture / "src" / str(index // 100) / f"file{index}.py"
+            path.parent.mkdir(exist_ok=True, parents=True)
+            path.write_bytes(content)
+            paths.append(path)
+        paths_by_tool[tool], expected[tool] = paths, hashes(paths)
+        # A missing header in the final directory must also be checked.
+        last = paths[-1]
+        original = last.read_bytes()
+        last.write_bytes(BODY)
+        status, _, _, text = invoke(commands[tool], fixture, output / "coverage.log")
+        if status != 1:
+            raise RuntimeError(f"{tool} did not report the last selected file: {text}")
+        last.write_bytes(original)
+    return expected, paths_by_tool
+
+
+def measure_files(
+    work: Path,
+    templates: dict[str, bytes],
+    commands: dict[str, list[str]],
+    counts: list[int],
+    runs: int,
+    bytes_per_file: int,
+    output: Path,
+) -> list[dict]:
+    samples = []
+    for count in counts:
+        expected, paths_by_tool = prepare_sources(work, templates, commands, count, bytes_per_file, output)
+        for run in range(runs + 1):
+            order = list(CHECKERS)
+            shift = run % len(order)
+            order = order[shift:] + order[:shift]
+            if run % 2:
+                order.reverse()
+            for tool in order:
+                fixture = work / tool
+                status, elapsed, _, text = invoke(commands[tool], fixture, output / "check.log")
+                if status != 0:
+                    raise RuntimeError(f"{tool}/{count} check failed: {text}")
+                status, _, rss, text = invoke(commands[tool], fixture, output / "rss.log", memory=True)
+                if status != 0:
+                    raise RuntimeError(f"{tool}/{count} RSS run failed: {text}")
+                if hashes(paths_by_tool[tool]) != expected[tool]:
+                    raise RuntimeError(f"{tool} check changed sources")
+                if run:
+                    samples.append({
+                        "tool": tool,
+                        "files": count,
+                        "bytes_per_file": bytes_per_file,
+                        "run": run,
+                        "elapsed_ms": elapsed,
+                        "peak_rss_mib": rss,
+                    })
+            print(f"{count} files, trial {run}/{runs}", flush=True)
+    return samples
+
+
+def write_results(samples: list[dict], counts: list[int], bytes_per_file: int, output: Path) -> None:
+    for filename, rows in (
+        ("samples.csv", samples),
+        (
+            "results.csv",
+            [
+                {
+                    "tool": tool,
+                    "files": count,
+                    "bytes_per_file": bytes_per_file,
+                    "median_ms": statistics.median(
+                        row["elapsed_ms"] for row in samples if row["tool"] == tool and row["files"] == count
+                    ),
+                    "min_ms": min(
+                        row["elapsed_ms"] for row in samples if row["tool"] == tool and row["files"] == count
+                    ),
+                    "max_ms": max(
+                        row["elapsed_ms"] for row in samples if row["tool"] == tool and row["files"] == count
+                    ),
+                    "peak_rss_mib": max(
+                        row["peak_rss_mib"] for row in samples if row["tool"] == tool and row["files"] == count
+                    ),
+                }
+                for tool in CHECKERS
+                for count in counts
+            ],
+        ),
+    ):
+        if filename == "results.csv":
+            for row in rows:
+                row["files_per_s"] = row["files"] * 1000 / row["median_ms"]
+        with (output / filename).open("w") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tools", type=Path, required=True, help="JSON map of tool names to executable paths")
@@ -154,122 +301,13 @@ def main() -> None:
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     year = datetime.datetime.now(datetime.timezone.utc).year
-    samples, probes, templates, commands = [], [], {}, {}
     with tempfile.TemporaryDirectory(prefix="header-tools-") as temp:
         work = Path(temp)
-        for tool in CHECKERS:
-            fixture = work / tool
-            fixture.mkdir()
-            template, command = configure(tool, tools[tool], fixture, year, args.license_file.resolve())
-            templates[tool], commands[tool] = template, command
-            source = fixture / "src" / "0" / "file0.py"
-            states = {
-                "clean": template,
-                "missing": BODY,
-                "wrong_owner": template.replace(b"Benchmark", b"OtherOwner"),
-                "stale_year": template.replace(str(year).encode(), str(year - 1).encode(), 1),
-            }
-            for state, content in states.items():
-                source.write_bytes(content)
-                before = source.read_bytes()
-                status, _, _, text = invoke(command, fixture, output / "probe.log")
-                if source.read_bytes() != before:
-                    raise RuntimeError(f"{tool} check wrote source bytes")
-                probes.append({"tool": tool, "case": state, "exit": status})
-                if state == "clean" and status != 0:
-                    raise RuntimeError(f"{tool} rejects its clean fixture: {text}")
-                if state == "missing" and status == 0:
-                    raise RuntimeError(f"{tool} skipped a selected source: {text}")
-            source.write_bytes(template)
-            (output / f"{tool}-header.txt").write_bytes(template.split(BODY)[0])
-            print(f"Validated {tool}", flush=True)
-        (output / "feature-probes.json").write_text(json.dumps(probes, indent=2) + "\n")
+        templates, commands = probe_headers(work, tools, year, args.license_file.resolve(), output)
         if args.probe_only:
             return
-        for count in args.files:
-            expected, paths_by_tool = {}, {}
-            for tool in CHECKERS:
-                fixture = work / tool
-                shutil.rmtree(fixture / "src")
-                template = templates[tool]
-                if len(template) > args.bytes:
-                    raise RuntimeError(f"Increase --bytes; {tool} header is too large")
-                content = template + b"\n" * (args.bytes - len(template))
-                paths = []
-                for index in range(count):
-                    path = fixture / "src" / str(index // 100) / f"file{index}.py"
-                    path.parent.mkdir(exist_ok=True, parents=True)
-                    path.write_bytes(content)
-                    paths.append(path)
-                paths_by_tool[tool], expected[tool] = paths, hashes(paths)
-                # A missing header in the final directory must also be checked.
-                last = paths[-1]
-                original = last.read_bytes()
-                last.write_bytes(BODY)
-                status, _, _, text = invoke(commands[tool], fixture, output / "coverage.log")
-                if status != 1:
-                    raise RuntimeError(f"{tool} did not report the last selected file: {text}")
-                last.write_bytes(original)
-            for run in range(args.runs + 1):
-                order = list(CHECKERS)
-                shift = run % len(order)
-                order = order[shift:] + order[:shift]
-                if run % 2:
-                    order.reverse()
-                for tool in order:
-                    fixture = work / tool
-                    status, elapsed, _, text = invoke(commands[tool], fixture, output / "check.log")
-                    if status != 0:
-                        raise RuntimeError(f"{tool}/{count} check failed: {text}")
-                    status, _, rss, text = invoke(commands[tool], fixture, output / "rss.log", memory=True)
-                    if status != 0:
-                        raise RuntimeError(f"{tool}/{count} RSS run failed: {text}")
-                    if hashes(paths_by_tool[tool]) != expected[tool]:
-                        raise RuntimeError(f"{tool} check changed sources")
-                    if run:
-                        samples.append({
-                            "tool": tool,
-                            "files": count,
-                            "bytes_per_file": args.bytes,
-                            "run": run,
-                            "elapsed_ms": elapsed,
-                            "peak_rss_mib": rss,
-                        })
-                print(f"{count} files, trial {run}/{args.runs}", flush=True)
-    for filename, rows in (
-        ("samples.csv", samples),
-        (
-            "results.csv",
-            [
-                {
-                    "tool": tool,
-                    "files": count,
-                    "bytes_per_file": args.bytes,
-                    "median_ms": statistics.median(
-                        row["elapsed_ms"] for row in samples if row["tool"] == tool and row["files"] == count
-                    ),
-                    "min_ms": min(
-                        row["elapsed_ms"] for row in samples if row["tool"] == tool and row["files"] == count
-                    ),
-                    "max_ms": max(
-                        row["elapsed_ms"] for row in samples if row["tool"] == tool and row["files"] == count
-                    ),
-                    "peak_rss_mib": max(
-                        row["peak_rss_mib"] for row in samples if row["tool"] == tool and row["files"] == count
-                    ),
-                }
-                for tool in CHECKERS
-                for count in args.files
-            ],
-        ),
-    ):
-        if filename == "results.csv":
-            for row in rows:
-                row["files_per_s"] = row["files"] * 1000 / row["median_ms"]
-        with (output / filename).open("w") as stream:
-            writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
-            writer.writeheader()
-            writer.writerows(rows)
+        samples = measure_files(work, templates, commands, args.files, args.runs, args.bytes, output)
+    write_results(samples, args.files, args.bytes, output)
     metadata = {
         "recorded_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "platform": platform.platform(),

@@ -69,12 +69,12 @@ bulk throughput. Peak RSS is the highest process memory seen in seven separate
 
 | Tool / check scope | 10 files | 10,000 files | Bulk files/s | Peak RSS |
 | --- | ---: | ---: | ---: | ---: |
-| LMH 0.7.0 / Policy | 4.5 ms | 171.5 ms | 58,317 | 16.3 MiB |
-| HawkEye 7.2.0 / Template | 3.8 ms | 248.9 ms | 40,179 | 7.0 MiB |
-| License Eye 0.9.0 / Template | 19.0 ms | 2322.7 ms | 4,305 | 64.5 MiB |
-| NWA 0.8.0 / Template | 5.0 ms | 639.9 ms | 15,627 | 50.5 MiB |
-| addlicense 1.2.0 / Presence | 2.9 ms | 434.6 ms | 23,012 | 33.7 MiB |
-| REUSE 6.2.0 / REUSE audit | 335.0 ms | 839.5 ms | 11,911 | 98.4 MiB |
+| LMH 0.7.0 / Policy | 4.7 ms | 153.9 ms | 64,972 | 16.0 MiB |
+| HawkEye 7.2.0 / Template | 3.8 ms | 243.9 ms | 40,997 | 6.9 MiB |
+| License Eye 0.9.0 / Template | 19.5 ms | 2339.7 ms | 4,274 | 61.7 MiB |
+| NWA 0.8.0 / Template | 5.2 ms | 624.5 ms | 16,014 | 49.7 MiB |
+| addlicense 1.2.0 / Presence | 3.0 ms | 424.6 ms | 23,551 | 24.0 MiB |
+| REUSE 6.2.0 / REUSE audit | 333.0 ms | 811.0 ms | 12,331 | 98.8 MiB |
 
 These commands do different work. addlicense checks presence; REUSE also checks
 declarations and license texts. REUSE's RSS does not sum its parallel workers.
