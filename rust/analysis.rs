@@ -57,6 +57,14 @@ pub fn build_policy(settings: &Settings, current_year: i32) -> Result<HeaderPoli
     if settings.year < 1000 || settings.year > current_year {
         return Err(format!("Invalid first copyright year: {}", settings.year));
     }
+    if settings.creation_year.is_some_and(|year| {
+        !(1000..=9999).contains(&year) || year < settings.year || year > current_year
+    }) {
+        return Err(
+            "creation-year must be a four-digit year between starting-year and the current year"
+                .into(),
+        );
+    }
     if settings.owner.is_empty() || settings.owner.contains(['\n', '\r']) {
         return Err("Please specify a single-line copyright owner".into());
     }
@@ -124,6 +132,7 @@ pub fn build_policy(settings: &Settings, current_year: i32) -> Result<HeaderPoli
         owner: settings.owner.clone(),
         starting_year: settings.year,
         current_year,
+        creation_year: settings.creation_year,
         expected_header: format!(
             "Copyright (C) {years}, {}.\n\n{}",
             settings.owner, notices[0]
@@ -141,21 +150,34 @@ pub struct ContentAnalysis {
 #[derive(Default)]
 pub(crate) struct Inspection {
     pub diagnostic: Option<Diagnostic>,
-    pub edit: Option<YearEdit>,
+    pub edit: Option<Edit>,
 }
 
-pub(crate) struct YearEdit {
-    range: std::ops::Range<usize>,
-    start: i32,
-    end: i32,
+pub(crate) enum Edit {
+    Year {
+        range: std::ops::Range<usize>,
+        start: i32,
+        end: i32,
+    },
+    Insert {
+        offset: usize,
+        header: Vec<u8>,
+    },
 }
 
-impl YearEdit {
+impl Edit {
     pub fn apply(&self, raw: &[u8]) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(raw.len().saturating_add(5));
-        bytes.extend_from_slice(&raw[..self.range.start]);
-        bytes.extend_from_slice(format!("{}-{}", self.start, self.end).as_bytes());
-        bytes.extend_from_slice(&raw[self.range.end..]);
+        let (range, text) = match self {
+            Self::Year { range, start, end } => (
+                range.clone(),
+                Cow::Owned(format!("{start}-{end}").into_bytes()),
+            ),
+            Self::Insert { offset, header } => (*offset..*offset, Cow::Borrowed(header.as_slice())),
+        };
+        let mut bytes = Vec::with_capacity(raw.len().saturating_add(text.len()));
+        bytes.extend_from_slice(&raw[..range.start]);
+        bytes.extend_from_slice(&text);
+        bytes.extend_from_slice(&raw[range.end..]);
         bytes
     }
 }
@@ -200,7 +222,20 @@ fn encoding_cookie(line: &[u8]) -> Result<Option<String>, String> {
     }))
 }
 
-fn decode_source(raw: &[u8]) -> Result<Cow<'_, str>, String> {
+#[derive(Clone, Copy)]
+enum SourceEncoding {
+    Utf8,
+    Ascii,
+    Latin1,
+    Windows1252,
+}
+
+const CP1252_EXTENDED: [char; 32] = [
+    '€', '\0', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\0', 'Ž', '\0', '\0', '‘',
+    '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\0', 'ž', 'Ÿ',
+];
+
+fn source_encoding(raw: &[u8]) -> Result<SourceEncoding, String> {
     let bom = raw.starts_with(b"\xef\xbb\xbf");
     let raw = if bom { &raw[3..] } else { raw };
     let mut lines = raw.split_inclusive(|byte| *byte == b'\n');
@@ -215,12 +250,29 @@ fn decode_source(raw: &[u8]) -> Result<Cow<'_, str>, String> {
     }
     match label {
         "utf-8" | "utf8" | "u8" | "utf" | "cp65001" | "utf8-ucs2" | "utf8-ucs4" => {
+            Ok(SourceEncoding::Utf8)
+        }
+        "ascii" | "us-ascii" | "646" | "ansi-x3.4-1968" | "ansi-x3.4-1986" | "ansi-x3-4-1968"
+        | "cp367" | "csascii" | "ibm367" | "iso646-us" | "iso-646.irv-1991" | "iso-ir-6" | "us" => {
+            Ok(SourceEncoding::Ascii)
+        }
+        "latin-1" | "latin1" | "iso8859-1" | "iso-8859-1" | "l1" | "8859" | "cp819" | "ibm819"
+        | "csisolatin1" | "iso8859" | "iso-ir-100" | "latin" => Ok(SourceEncoding::Latin1),
+        "cp1252" | "windows-1252" | "1252" => Ok(SourceEncoding::Windows1252),
+        _ => Err(format!("unsupported source encoding: {label}")),
+    }
+}
+
+fn decode_source(raw: &[u8]) -> Result<Cow<'_, str>, String> {
+    let encoding = source_encoding(raw)?;
+    let raw = raw.strip_prefix(b"\xef\xbb\xbf").unwrap_or(raw);
+    match encoding {
+        SourceEncoding::Utf8 => {
             return std::str::from_utf8(raw)
                 .map(Cow::Borrowed)
                 .map_err(|e| e.to_string());
         }
-        "ascii" | "us-ascii" | "646" | "ansi-x3.4-1968" | "ansi-x3.4-1986" | "ansi-x3-4-1968"
-        | "cp367" | "csascii" | "ibm367" | "iso646-us" | "iso-646.irv-1991" | "iso-ir-6" | "us" => {
+        SourceEncoding::Ascii => {
             return if raw.is_ascii() {
                 Ok(Cow::Borrowed(
                     std::str::from_utf8(raw).expect("ASCII is UTF-8"),
@@ -229,14 +281,12 @@ fn decode_source(raw: &[u8]) -> Result<Cow<'_, str>, String> {
                 Err("invalid byte in ASCII source".into())
             };
         }
-        "latin-1" | "latin1" | "iso8859-1" | "iso-8859-1" | "l1" | "8859" | "cp819" | "ibm819"
-        | "csisolatin1" | "iso8859" | "iso-ir-100" | "latin" => {
+        SourceEncoding::Latin1 => {
             return Ok(Cow::Owned(
                 raw.iter().map(|byte| char::from(*byte)).collect(),
             ));
         }
-        "cp1252" | "windows-1252" | "1252" => {}
-        _ => return Err(format!("unsupported source encoding: {label}")),
+        SourceEncoding::Windows1252 => {}
     }
     // Python rejects the five undefined Windows-1252 byte values.
     if raw
@@ -245,10 +295,6 @@ fn decode_source(raw: &[u8]) -> Result<Cow<'_, str>, String> {
     {
         return Err("undefined byte in Windows-1252 source".into());
     }
-    const CP1252_EXTENDED: [char; 32] = [
-        '€', '\0', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\0', 'Ž', '\0', '\0',
-        '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\0', 'ž', 'Ÿ',
-    ];
     Ok(Cow::Owned(
         raw.iter()
             .map(|&byte| {
@@ -260,6 +306,32 @@ fn decode_source(raw: &[u8]) -> Result<Cow<'_, str>, String> {
             })
             .collect(),
     ))
+}
+
+impl SourceEncoding {
+    fn encode(self, text: &str) -> Option<Vec<u8>> {
+        match self {
+            Self::Utf8 => Some(text.as_bytes().to_vec()),
+            Self::Ascii => text.is_ascii().then(|| text.as_bytes().to_vec()),
+            Self::Latin1 => text
+                .chars()
+                .map(|c| u8::try_from(u32::from(c)).ok())
+                .collect(),
+            Self::Windows1252 => text
+                .chars()
+                .map(|c| {
+                    if c <= '\u{7f}' || ('\u{a0}'..='\u{ff}').contains(&c) {
+                        u8::try_from(u32::from(c)).ok()
+                    } else {
+                        CP1252_EXTENDED
+                            .iter()
+                            .position(|&value| value == c && value != '\0')
+                            .map(|index| 0x80 + index as u8)
+                    }
+                })
+                .collect(),
+        }
+    }
 }
 
 fn is_shebang(source: &str, language: Language) -> bool {
@@ -451,6 +523,99 @@ fn block_header(comment: &str) -> Option<Vec<String>> {
     )
 }
 
+fn mentions_licensing(text: &str) -> bool {
+    let text = text.to_ascii_lowercase();
+    ["copyright", "spdx", "license", "licence"]
+        .iter()
+        .any(|word| text.contains(word))
+}
+
+fn licensing_docstring(source: &str) -> bool {
+    let source = source.trim_start();
+    let source = source.strip_prefix(['r', 'R', 'u', 'U']).unwrap_or(source);
+    let bytes = source.as_bytes();
+    let Some(&quote) = bytes.first().filter(|&&byte| matches!(byte, b'\'' | b'"')) else {
+        return false;
+    };
+    let width = if bytes.starts_with(&[quote; 3]) { 3 } else { 1 };
+    let delimiter = [quote; 3];
+    let mut index = width;
+    while index < bytes.len() {
+        if bytes[index] == b'\\' {
+            index += 2;
+        } else if bytes[index..].starts_with(&delimiter[..width]) {
+            return mentions_licensing(&source[width..index]);
+        } else {
+            index += 1;
+        }
+    }
+    true
+}
+
+fn missing_header_edit(
+    raw: &[u8],
+    policy: &HeaderPolicy,
+    language: Language,
+    header_index: usize,
+    separator_valid: bool,
+) -> Option<Edit> {
+    let year = policy.creation_year?;
+    if !(1000..=9999).contains(&year)
+        || year < policy.starting_year
+        || year > policy.current_year
+        || !(1000..=9999).contains(&policy.current_year)
+    {
+        return None;
+    }
+    let years = if year == policy.current_year {
+        year.to_string()
+    } else {
+        format!("{year}-{}", policy.current_year)
+    };
+    let notice = policy.license_notices.first()?;
+    let mut text = render_header(
+        &format!("Copyright (C) {years}, {}.\n\n{notice}", policy.owner),
+        language,
+    );
+    if text.contains('\0') {
+        return None;
+    }
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push('\n');
+    let bom = usize::from(raw.starts_with(b"\xef\xbb\xbf")) * 3;
+    let body = &raw[bom..];
+    let offset = bom
+        + body
+            .split_inclusive(|&byte| byte == b'\n')
+            .take(header_index)
+            .map(<[u8]>::len)
+            .sum::<usize>();
+    let crlf = body
+        .iter()
+        .position(|&byte| byte == b'\n')
+        .is_some_and(|index| index > 0 && body[index - 1] == b'\r');
+    if header_index > 0 && !separator_valid {
+        text.insert(0, '\n');
+        if raw.get(offset.wrapping_sub(1)) != Some(&b'\n') {
+            text.insert(0, '\n');
+        }
+    }
+    if crlf {
+        text = text.replace('\n', "\r\n");
+    }
+    let encoding = if language == Language::Python {
+        source_encoding(raw).ok()?
+    } else {
+        SourceEncoding::Utf8
+    };
+    Some(Edit::Insert {
+        offset,
+        header: encoding.encode(&text)?,
+    })
+}
+
 pub fn analyze(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> ContentAnalysis {
     let content = inspect(raw, policy, display_path);
     ContentAnalysis {
@@ -486,6 +651,10 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         identifiers: identifier_count,
         prose_licenses,
     } = leading_comments(&source, language);
+    let licensing_literal = policy.creation_year.is_some()
+        && comments.is_empty()
+        && language == Language::Python
+        && licensing_docstring(&source[end..]);
     let source = &source[..end];
     let ambiguous_header = ambiguous_header
         || (matches!(language, Language::Javascript | Language::Typescript)
@@ -511,12 +680,36 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         );
     }
     if header_index >= lines.len() || comments.is_empty() {
-        return problem(
+        let mut result = problem(
             display_path,
             header_index + 1,
             "LMH001",
             "missing legal header",
         );
+        if policy.creation_year.is_some()
+            && !bare_cr
+            && !licensing_literal
+            && !mentions_licensing(&source)
+            && let Some(edit) =
+                missing_header_edit(raw, policy, language, header_index, separator_valid)
+        {
+            // Validate the generated layout before the existing guarded writer can apply it.
+            let candidate = edit.apply(raw);
+            let mut verification_policy = policy.clone();
+            verification_policy.creation_year = None;
+            if inspect(&candidate, &verification_policy, display_path)
+                .diagnostic
+                .is_none()
+            {
+                result.edit = Some(edit);
+                result
+                    .diagnostic
+                    .as_mut()
+                    .expect("missing-header diagnostic")
+                    .fixable = true;
+            }
+        }
+        return result;
     }
     let block = comments[0].1.starts_with("/*");
     let block_lines = block.then(|| block_header(comments[0].1)).flatten();
@@ -745,7 +938,7 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
                 + years.start();
             // Only digits/a hyphen change inside the single validated copyright field.
             // All supported encodings preserve ASCII, so syntax and other header fields stay valid.
-            result.edit = Some(YearEdit {
+            result.edit = Some(Edit::Year {
                 range: year_start..year_start + captures["years"].len(),
                 start: start_year,
                 end: policy.current_year,
@@ -769,6 +962,7 @@ mod tests {
             owner: "Example Owner".into(),
             starting_year: 2022,
             current_year: 2030,
+            creation_year: None,
             license_notices: vec!["License notice.\n".into()],
             expected_header: String::new(),
         }
@@ -776,6 +970,145 @@ mod tests {
 
     fn header(years: &str) -> String {
         format!("# Copyright (C) {years}, Example Owner.\n\n# License notice.\n\nvalue = 'café'\n")
+    }
+
+    #[test]
+    fn missing_headers_use_declared_years_and_preserve_preambles_and_bodies() {
+        let mut insertion = policy();
+        insertion.creation_year = Some(2024);
+        for (path, prefix, body) in [
+            ("file.py", "", "value = 'café'\n"),
+            (
+                "script.py",
+                "#!/usr/bin/env python3\n# coding: utf-8\n",
+                "value = 1\n",
+            ),
+            (
+                "file.js",
+                "#!/usr/bin/env node\n\n",
+                "'use strict';\nconst value = 1;\n",
+            ),
+            ("file.ts", "", "const value: number = 1;\n"),
+            ("file.rs", "", "#![no_std]\nconst VALUE: i32 = 1;\n"),
+            (
+                "file.go",
+                "//go:build linux\n// +build linux\n\n",
+                "package example\n",
+            ),
+            (
+                "Package.swift",
+                "// swift-tools-version: 6.0\n",
+                "import PackageDescription\n",
+            ),
+            ("script.sh", "#!/bin/bash\n", "printf '%s\\n' café\n"),
+            ("file.c", "", "#pragma once\nint value = 1;\n"),
+            ("file.cpp", "", "#include <vector>\nint value = 1;\n"),
+        ] {
+            let raw = format!("\u{feff}{prefix}{body}")
+                .replace('\n', "\r\n")
+                .into_bytes();
+            let unchanged = analyze(&raw, &policy(), path);
+            assert_eq!(unchanged.diagnostic.as_ref().unwrap().code, "LMH001");
+            assert!(!unchanged.diagnostic.unwrap().fixable);
+            assert!(unchanged.replacement.is_none());
+            let result = analyze(&raw, &insertion, path);
+            assert!(result.diagnostic.as_ref().unwrap().fixable, "{path}");
+            let language = Language::from_path(std::path::Path::new(path)).unwrap();
+            let generated = render_header(
+                "Copyright (C) 2024-2030, Example Owner.\n\nLicense notice.\n\n",
+                language,
+            )
+            .replace('\n', "\r\n");
+            let gap = if prefix.is_empty() || prefix.ends_with("\n\n") {
+                ""
+            } else {
+                "\r\n"
+            };
+            let expected = format!(
+                "\u{feff}{}{gap}{generated}{}",
+                prefix.replace('\n', "\r\n"),
+                body.replace('\n', "\r\n")
+            );
+            let fixed = result.replacement.unwrap();
+            assert_eq!(fixed, expected.as_bytes(), "{path}");
+            assert!(
+                analyze(&fixed, &insertion, path).diagnostic.is_none(),
+                "{path}"
+            );
+        }
+        for raw in [b"".as_slice(), b"#!/bin/sh"] {
+            let fixed = analyze(raw, &insertion, "empty.sh").replacement.unwrap();
+            assert!(fixed.starts_with(raw));
+            assert!(analyze(&fixed, &insertion, "empty.sh").diagnostic.is_none());
+        }
+    }
+
+    #[test]
+    fn missing_header_insertion_refuses_existing_legal_text_and_invalid_years() {
+        let mut insertion = policy();
+        insertion.creation_year = Some(2024);
+        for (path, raw) in [
+            ("file.py", "# copyright 2024 Other Owner\nvalue = 1\n"),
+            ("file.py", "# SPDX-License-Identifier: MIT\nvalue = 1\n"),
+            (
+                "file.py",
+                "\"\"\"Copyright 2024 Other Owner.\"\"\"\nvalue = 1\n",
+            ),
+            ("file.py", "r'''Existing licence text.'''\nvalue = 1\n"),
+            ("file.c", "/* Licensed to Other Owner. */\nint value = 1;\n"),
+            ("file.cpp", "/* unfinished\nint value = 1;\n"),
+        ] {
+            let result = analyze(raw.as_bytes(), &insertion, path);
+            assert!(result.replacement.is_none(), "{path}: {raw}");
+            assert!(!result.diagnostic.unwrap().fixable);
+        }
+        for year in [999, 2021, 2031, 10000] {
+            insertion.creation_year = Some(year);
+            assert!(
+                analyze(b"value = 1\n", &insertion, "file.py")
+                    .replacement
+                    .is_none()
+            );
+        }
+        insertion.creation_year = Some(2024);
+        insertion.owner.push('\0');
+        assert!(
+            analyze(b"value = 1\n", &insertion, "file.py")
+                .replacement
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn inserted_headers_keep_python_encodings_and_refuse_unrepresentable_notices() {
+        let mut insertion = policy();
+        insertion.creation_year = Some(2030);
+        for (label, owner, body) in [
+            ("latin-1", "Café Owner", b"value = '\xe9'\r\n".as_slice()),
+            ("cp1252", "€ Owner", b"value = '\x80'\r\n".as_slice()),
+            ("ascii", "Plain Owner", b"value = 1\r\n".as_slice()),
+        ] {
+            insertion.owner = owner.into();
+            let prefix = format!("#!/usr/bin/python\r\n# coding: {label}\r\n").into_bytes();
+            let raw = [prefix.as_slice(), body].concat();
+            let fixed = analyze(&raw, &insertion, "encoded.py").replacement.unwrap();
+            assert!(fixed.starts_with(&prefix));
+            assert!(fixed.ends_with(body));
+            assert!(
+                analyze(&fixed, &insertion, "encoded.py")
+                    .diagnostic
+                    .is_none()
+            );
+        }
+        insertion.owner = "Unicode € Owner".into();
+        for label in ["ascii", "latin-1"] {
+            let raw = format!("# coding: {label}\nvalue = 1\n");
+            assert!(
+                analyze(raw.as_bytes(), &insertion, "encoded.py")
+                    .replacement
+                    .is_none()
+            );
+        }
     }
 
     fn inspect(source: impl AsRef<[u8]>) -> ContentAnalysis {

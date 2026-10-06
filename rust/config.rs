@@ -19,7 +19,7 @@ pub struct Cli {
 pub enum Command {
     /// Check copyright and license headers without writing source files.
     Check(Options),
-    /// Safely refresh only recognized stale copyright years.
+    /// Refresh stale years and insert missing headers with a declared creation year.
     Fix(Options),
 }
 
@@ -57,6 +57,9 @@ pub struct Options {
     pub owner: Option<String>,
     #[arg(long, allow_negative_numbers = true)]
     pub starting_year: Option<i32>,
+    /// Declared first copyright year for missing headers; never inferred.
+    #[arg(long, allow_negative_numbers = true)]
+    pub creation_year: Option<i32>,
     #[arg(long)]
     pub license: Option<String>,
     #[arg(long)]
@@ -155,7 +158,7 @@ fn config_table(path: &Path) -> Result<Option<Table>, String> {
                 .as_str()
                 .is_none_or(str::is_empty)
                 .then_some("expected a non-empty string"),
-            "starting-year" => value
+            "starting-year" | "creation-year" => value
                 .as_integer()
                 .is_none_or(|v| !(1000..=9999).contains(&v))
                 .then_some("expected a four-digit integer"),
@@ -291,6 +294,12 @@ pub fn resolve(options: &Options) -> Result<Settings, String> {
     Ok(Settings {
         owner,
         year,
+        creation_year: options.creation_year.or_else(|| {
+            table
+                .get("creation-year")
+                .and_then(Value::as_integer)
+                .and_then(|year| i32::try_from(year).ok())
+        }),
         license,
         license_notice: notice,
         license_path: root.join("LICENSE"),

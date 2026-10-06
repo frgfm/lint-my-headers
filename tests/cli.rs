@@ -63,6 +63,185 @@ fn json_run(root: &Path, args: &[&str], exit: i32) -> Value {
 }
 
 #[test]
+fn missing_headers_use_explicit_policy_and_the_existing_guarded_writer() {
+    let dir = workspace();
+    let root = dir.path();
+    write(
+        root,
+        "pyproject.toml",
+        format!(
+            "{CONFIG}languages = ['python', 'javascript', 'typescript', 'rust', 'go', 'swift', 'bash', 'c', 'cpp']\n"
+        ),
+    );
+    let originals: Vec<_> = [
+        (
+            "py",
+            "#!/usr/bin/python\r\n# coding: utf-8\r\nvalue = 'café'\r\n",
+        ),
+        (
+            "js",
+            "#!/usr/bin/env node\r\n'use strict';\r\nconst value = 1;\r\n",
+        ),
+        ("ts", "const value: number = 1;\r\n"),
+        ("rs", "#![no_std]\r\nconst VALUE: i32 = 1;\r\n"),
+        ("go", "//go:build linux\r\n\r\npackage example\r\n"),
+        (
+            "swift",
+            "// swift-tools-version: 6.0\r\nimport PackageDescription\r\n",
+        ),
+        ("sh", "#!/bin/bash\r\necho café\r\n"),
+        ("c", "#pragma once\r\nint value = 1;\r\n"),
+        ("cpp", "#include <vector>\r\nint value = 1;\r\n"),
+    ]
+    .into_iter()
+    .map(|(extension, body)| {
+        let name = format!("src/missing.{extension}");
+        let body = format!("\u{feff}{body}");
+        write(root, &name, &body);
+        (name, body)
+    })
+    .collect();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            root.join("src/missing.sh"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
+    let without_year = json_run(root, &["fix"], 1);
+    assert_eq!(without_year["changed"], json!([]));
+    assert!(
+        without_year["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["code"] == "LMH001" && d["fixable"] == false)
+    );
+    let declared = (year() - 2).to_string();
+    let checked = json_run(root, &["check", "--creation-year", &declared], 1);
+    assert_eq!(checked["schema_version"], 1);
+    assert!(
+        checked["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["code"] == "LMH001" && d["fixable"] == true)
+    );
+    for (name, bytes) in &originals {
+        assert_eq!(fs::read_to_string(root.join(name)).unwrap(), *bytes);
+    }
+    let fixed = json_run(root, &["fix", "--creation-year", &declared], 0);
+    assert_eq!(fixed["changed"].as_array().unwrap().len(), originals.len());
+    for (name, body) in originals {
+        let bytes = fs::read(root.join(&name)).unwrap();
+        assert!(bytes.starts_with(b"\xef\xbb\xbf"));
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains(&format!("Copyright (C) {declared}-{}, {OWNER}.", year())));
+        assert!(text.contains("\r\n\r\n"));
+        let code = body
+            .rsplit_once("\r\n")
+            .unwrap()
+            .0
+            .rsplit_once("\r\n")
+            .map_or(
+                body.trim_start_matches('\u{feff}').trim_end_matches("\r\n"),
+                |(_, code)| code,
+            );
+        assert!(text.ends_with(&format!("{code}\r\n")), "{name}");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(root.join("src/missing.sh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+    }
+    assert_eq!(json_run(root, &["check"], 0)["diagnostics"], json!([]));
+    assert_eq!(
+        json_run(root, &["fix", "--creation-year", &declared], 0)["changed"],
+        json!([])
+    );
+}
+
+#[test]
+fn creation_year_configuration_and_errors_are_resolved_before_writes() {
+    let dir = workspace();
+    let root = dir.path();
+    let body = "value = 1\n";
+    write(root, "src/missing.py", body);
+    for bad in [
+        "'2024'".to_string(),
+        "999".to_string(),
+        "2021".to_string(),
+        (year() + 1).to_string(),
+    ] {
+        write(
+            root,
+            "pyproject.toml",
+            format!("{CONFIG}creation-year = {bad}\n"),
+        );
+        let result = json_run(root, &["fix"], 2);
+        assert_eq!(result["changed"], json!([]));
+        assert_eq!(
+            fs::read_to_string(root.join("src/missing.py")).unwrap(),
+            body
+        );
+    }
+    write(
+        root,
+        "pyproject.toml",
+        format!("{CONFIG}creation-year = {}\n", year() - 2),
+    );
+    let current = year().to_string();
+    json_run(root, &["fix", "--creation-year", &current], 0);
+    let fixed = fs::read_to_string(root.join("src/missing.py")).unwrap();
+    assert!(fixed.starts_with(&format!("# Copyright (C) {current}, {OWNER}.\n")));
+    assert!(!fixed.contains(&format!("{}-{current}", year() - 2)));
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_header_insertion_refuses_links_and_keeps_other_owners() {
+    use std::os::unix::fs::symlink;
+    let dir = workspace();
+    let root = dir.path();
+    write(
+        root,
+        "pyproject.toml",
+        format!("{CONFIG}creation-year = {}\n", year()),
+    );
+    write(root, "src/linked.py", "value = 1\n");
+    fs::hard_link(root.join("src/linked.py"), root.join("src/alias.py")).unwrap();
+    symlink(root.join("src/linked.py"), root.join("src/symlink.py")).unwrap();
+    let other = source(year(), "Other Owner", NOTICE);
+    write(root, "src/other.py", &other);
+    let before: Vec<_> = ["linked.py", "alias.py", "symlink.py", "other.py"]
+        .into_iter()
+        .map(|name| (name, fs::read(root.join("src").join(name)).unwrap()))
+        .collect();
+    let checked = json_run(root, &["check"], 1);
+    assert!(
+        checked["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["fixable"] == false)
+    );
+    let fixed = json_run(root, &["fix"], 1);
+    assert_eq!(fixed["changed"], json!([]));
+    for (name, bytes) in before {
+        assert_eq!(fs::read(root.join("src").join(name)).unwrap(), bytes);
+    }
+}
+
+#[test]
 fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs() {
     let dir = workspace();
     let root = dir.path();

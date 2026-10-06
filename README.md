@@ -138,6 +138,25 @@ improvement. See [requirements and reproduction](docs/benchmarks.md#reproduce).
 
 ## Configuration and safety
 
+### Insert missing headers (unreleased)
+
+The source checkout can insert missing headers with your declared owner and
+license notice. Supply the file's actual first copyright year:
+
+```shell
+lmh check --creation-year 2024 src/new_file.py
+lmh fix --creation-year 2024 src/new_file.py
+lmh check src/new_file.py
+git diff
+```
+
+`creation-year` can also be set in project configuration. It applies to every
+selected missing header. `starting-year` remains the earliest allowed year and
+does not supply this value. Without a creation year, missing headers stay
+unresolved. Existing legal text and unsafe targets require review. Insertion
+keeps source bytes, encoding, preambles, line endings, and file mode. Published
+0.7.0 does not include this feature.
+
 Keep the policy in the file your project already uses:
 
 | File | Configuration |
@@ -163,10 +182,10 @@ paths are relative to the invocation directory. Unsupported extensions are skipp
 Exclude generated, dependency, and build folders with `ignore-folders`; LMH does not
 infer exclusions from `.gitignore`.
 
-Repairs require one recognized stale year for the configured owner. Ambiguous layouts,
+Published 0.7.0 repairs require one recognized stale year for the configured owner. Ambiguous layouts,
 wrong owners, future years, unsupported encodings, symlinks/reparse points, multiple hard
 links, and concurrently changed targets are refused. Ownership and licensing always
-come from your policy; LMH does not insert missing headers or establish legal, SPDX, or
+come from your policy; published 0.7.0 does not insert missing headers or establish legal, SPDX, or
 REUSE compliance.
 
 See the [configuration guide](docs/configuration.md) for all options, language aliases,
@@ -178,7 +197,7 @@ The source checkout also accepts common `Copyright` lines, ordinary `/* ... */`
 headers, and SPDX copyright/license pairs. These layouts are not supported by
 the published **0.7.0** release. See the
 [header layout guide](docs/configuration.md#additional-layouts-unreleased) for
-examples and limits. Repairs still change only one recognized stale year.
+examples and limits. Existing-header repairs still change only one recognized stale year.
 
 ```c
 /*
@@ -384,7 +403,7 @@ jobs:
             --body "Annual refresh of recognized Python copyright years using the declared header policy."
 ```
 
-The external UV environment keeps installed dependency files outside the scan and PR. Repairs follow `[tool.lint-my-headers]` paths/exclusions and update only recognized stale years for its declared owner in supported Python files. They preserve creation years and all other bytes/modes. Missing, ambiguous, unsafe, or wrong-owner notices require manual review; a failed repair stops before any branch or PR is published. To cover more Python source files, extend the declared paths while preserving generated/vendor exclusions. This annual workflow stages Python changes only.
+The external UV environment keeps installed dependency files outside the scan and PR. Repairs follow `[tool.lint-my-headers]` paths/exclusions and refresh recognized stale years for its declared owner in supported Python files. Leave `creation-year` unset for this year-only workflow. Missing, ambiguous, unsafe, or wrong-owner notices then require manual review; a failed repair stops before any branch or PR is published. Existing source bytes and modes are preserved. To cover more Python source files, extend the declared paths while preserving generated/vendor exclusions. This annual workflow stages Python changes only.
 
 Each year gets one `automation/update-copyright-years-YYYY` branch. Existing PRs, including closed PRs, are left untouched; reopen the existing PR if it was closed by mistake. If a push succeeded but PR creation failed, rerunning resumes PR creation from that branch without overwriting it. If repairs make no changes and no annual branch already exists, no PR is created. Only tracked Python changes are committed; generated untracked files are excluded. Pushes never target the default branch or force-update an existing branch.
 

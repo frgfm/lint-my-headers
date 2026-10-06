@@ -203,7 +203,10 @@ pub fn run(settings: &Settings, command: &str, current_year: i32) -> CommandResu
             let Some(diagnostic) = &mut content.diagnostic else {
                 return Ok(None);
             };
-            if diagnostic.code != "LMH004" {
+            if !matches!(diagnostic.code.as_str(), "LMH001" | "LMH004") {
+                return Ok(None);
+            }
+            if diagnostic.code == "LMH001" && content.edit.is_none() {
                 return Ok(None);
             }
             let repair = match (&snapshot.unsafe_reason, &content.edit) {
@@ -413,6 +416,7 @@ mod tests {
             owner: "Owner".into(),
             starting_year: 2024,
             current_year: 2030,
+            creation_year: None,
             license_notices: vec!["Notice.\n".into()],
             expected_header: String::new(),
         };

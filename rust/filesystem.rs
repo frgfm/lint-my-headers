@@ -378,6 +378,7 @@ mod tests {
         Settings {
             owner: "Owner".into(),
             year: 2020,
+            creation_year: None,
             license: None,
             license_notice: None,
             license_path: root.join("LICENSE"),

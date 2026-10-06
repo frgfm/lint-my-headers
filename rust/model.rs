@@ -63,6 +63,7 @@ impl Language {
 pub struct Settings {
     pub owner: String,
     pub year: i32,
+    pub creation_year: Option<i32>,
     pub license: Option<String>,
     pub license_notice: Option<PathBuf>,
     pub license_path: PathBuf,
@@ -79,6 +80,7 @@ pub struct HeaderPolicy {
     pub owner: String,
     pub starting_year: i32,
     pub current_year: i32,
+    pub creation_year: Option<i32>,
     pub license_notices: Vec<String>,
     pub expected_header: String,
 }

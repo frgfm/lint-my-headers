@@ -4,7 +4,7 @@ Follow the [code of conduct](CODE_OF_CONDUCT.md), [runtime contracts](README.md)
 
 ## Structure
 
-- `rust/analysis.rs`: header recognition and proposed year replacements.
+- `rust/analysis.rs`: header recognition, proposed year replacements, and declared missing-header insertion.
 - `rust/filesystem.rs`: discovery, identity checks, and atomic writes.
 - `rust/config.rs`, `rust/lib.rs`: configuration, command execution, and output.
 - `tests/cli.rs` and Rust module tests: CLI and safety regression coverage.
@@ -32,7 +32,7 @@ git diff --check
 
 `make style` applies formatting fixes. Review its diff. `make spdx-check` verifies the exact pinned snapshot and generated legacy compatibility data; use `python scripts/update_spdx_licenses.py --help` for deliberate updates.
 
-Keep regressions covered at the layer that owns the behavior. Preserve read-only checks, year-only repairs, all other bytes/mode, link/race refusal, JSON, exit codes, and Action outputs. Never infer legal ownership or licensing.
+Keep regressions covered at the layer that owns the behavior. Preserve read-only checks, limited end-year repairs, explicit creation years for header insertion, existing bytes/mode, link/race refusal, JSON, exit codes, and Action outputs. Never infer ownership, licensing, or creation years.
 
 `lmh` tests the source hook. The wheel-hook smoke tests use the artifacts from
 `make package-check` with fresh caches and compiler guards. They check Python

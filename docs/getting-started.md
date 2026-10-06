@@ -97,7 +97,7 @@ Checks are read-only. A valid Python header in 2026 looks like this:
 
 Bash uses the same `#` marker. Other supported languages use `//`, with the same
 text and blank lines. See [header layouts](configuration.md#header-layouts) for
-language-specific details. Missing headers require manual insertion and review.
+language-specific details. Published 0.7.0 leaves missing headers for manual review.
 The [additional layouts](configuration.md#additional-layouts-unreleased) support
 common copyright lines, ordinary blocks, and SPDX pairs in the unreleased source
 checkout; they are not available in published 0.7.0.
@@ -116,6 +116,28 @@ git diff
 In 2026, a creation year of `2024` with an end year of `2025` becomes
 `2024-2026`. The tool retains the creation year and every other byte. It leaves
 ineligible findings for manual review.
+
+## Insert a missing header (unreleased)
+
+The source checkout can insert a header when the policy supplies its owner and
+notice and you declare the file's first copyright year. The existing
+`starting-year` is a validation floor; it is not used as the file's year.
+
+```shell
+lmh check --creation-year 2024 src/new_file.py
+lmh fix --creation-year 2024 src/new_file.py
+lmh check src/new_file.py
+git diff
+```
+
+The new header uses 2024 through the current year. Declare the actual year for
+the selected files; `creation-year = 2024` in project configuration has the same
+effect. Without this declaration, `fix` keeps `LMH001` unresolved.
+
+Insertion keeps the original bytes, encoding, line endings, preambles, and mode.
+Existing legal declarations, ambiguous layouts, and notices that cannot be
+encoded in the file remain unfixable. Existing headers still use the limited
+end-year repair. This feature is not in published 0.7.0.
 
 | Exit code | Meaning |
 | --- | --- |

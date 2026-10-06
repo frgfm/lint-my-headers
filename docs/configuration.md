@@ -51,6 +51,7 @@ SwiftPM/Xcode projects, and shell or C/C++ projects can use `.lmh.toml`;
 | --- | --- |
 | `owner` / `--owner` | Required exact, single-line copyright owner. |
 | `starting-year` / `--starting-year` | Required earliest accepted file creation year. |
+| `creation-year` / `--creation-year` | Unreleased source only. Optional declared first year for inserting missing headers; default unset. Applies to all selected missing headers, not existing ones. |
 | `license` / `--license` | SPDX identifier selecting a prose notice; requires a local `LICENSE`. |
 | `license-notice` / `--license-notice` | Custom notice file; configure exactly one license source. |
 | `paths` / positional paths | Selected files or directories; default `.`. |

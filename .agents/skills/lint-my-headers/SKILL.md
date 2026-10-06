@@ -70,7 +70,7 @@ Before `fix`, record the pre-existing diff so unrelated changes remain distingui
 lmh fix --output-format json [PATH...]
 ```
 
-The CLI may update only recognized stale years. It deliberately leaves missing, malformed, ambiguous, future-dated, wrong-owner, wrong-license, symlinked, reparse-point, and multi-link targets unresolved.
+Published 0.7.0 updates only recognized stale years. The unreleased source checkout can also insert missing headers when the owner, notice, and `creation-year` are explicitly declared and the diagnostic is fixable. Never substitute the policy's earliest accepted `starting-year` for a file's creation year. Existing legal text, malformed, ambiguous, future-dated, wrong-owner, wrong-license, symlinked, reparse-point, and multi-link targets stay unresolved.
 
 After `fix`:
 
@@ -83,6 +83,7 @@ After `fix`:
 ### 5. Configure integrations only when requested
 
 - Published 0.7.0 uses the existing prose layout. The unreleased source checkout also supports common prose copyright forms, ordinary block headers, and single-owner SPDX pairs; see `docs/configuration.md`. Verify the source revision before using those layouts. Do not infer their availability from the version string alone or claim REUSE compliance.
+- Missing-header insertion is also unreleased. Verify `--creation-year` in the source CLI, obtain the year from explicit project/user policy, scope the selected files, run `check`, then use `fix` only when authorized. Without `creation-year`, missing headers remain unfixable.
 - Put policy in one supported project configuration; do not duplicate it in each integration. Header wording and blank lines are shared; Python and Bash/shell use `#`; other supported languages use `//`. Shell scripts use `.sh` or `.bash` with `languages = ["bash"]` (alias `shell`) and a blank separator after a shebang; extensionless scripts are skipped. C/C++ projects use `.lmh.toml` with `languages = ["c", "cpp"]` (`c++` aliases `cpp`); shared `.h` headers are checked with either selector. Put include guards and `#pragma once` after the ordinary `//` header. Prefer plain-text custom license notices. Rust packages may use `[package.metadata.lint-my-headers]` and virtual workspaces `[workspace.metadata.lint-my-headers]` in `Cargo.toml`, with `languages = ["rust"]`. Go and Swift projects use `.lmh.toml` with their language selected; do not place policy in `go.mod`, `go.work`, or `Package.swift`. Preserve the SwiftPM tools-version directive as the first line with a blank separator before the header.
 - Prefer the README's wheel-only local `lmh` hook with an exact verified PyPI version. The first-party Rust hook is for source checkouts. Use explicit placeholders when publication cannot be verified without unauthorized network access.
 - Give pull-request checks read-only `contents` permission.
