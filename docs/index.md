@@ -49,6 +49,8 @@ The creation year, owner, and every other byte stay intact.
 
 ## Documentation
 
+- [Compare header tools](comparison.md): choose between policy checks, header
+  insertion, template formatting, and REUSE workflows.
 - [Getting started](getting-started.md): install the CLI, declare a first policy,
   and check your existing headers.
 - [Configuration](configuration.md): configuration files, language selectors, and

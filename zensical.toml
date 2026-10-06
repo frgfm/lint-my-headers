@@ -8,6 +8,7 @@ edit_uri = "edit/main/docs/"
 extra_css = ["stylesheets/fonts.css"]
 nav = [
   { "Overview" = "index.md" },
+  { "Compare header tools" = "comparison.md" },
   { "Getting started" = "getting-started.md" },
   { "Configuration" = "configuration.md" },
   { "Integrations" = "integrations.md" },
