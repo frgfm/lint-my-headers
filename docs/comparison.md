@@ -79,17 +79,17 @@ separate runs. The RSS column below is for the 10,000-file case.
 
 | Tool | 10 files | 1,000 files | 10,000 files | Bulk files/s | Peak RSS |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| LMH 0.7.0 | 4.5 ms | 21.4 ms | 171.5 ms | 58,317 | 16.3 MiB |
-| HawkEye 7.2.0 | 3.8 ms | 28.4 ms | 248.9 ms | 40,179 | 7.0 MiB |
-| License Eye 0.9.0 | 19.0 ms | 259.4 ms | 2322.7 ms | 4,305 | 64.5 MiB |
-| NWA 0.8.0 | 5.0 ms | 49.2 ms | 639.9 ms | 15,627 | 50.5 MiB |
+| LMH 0.7.0 | 4.7 ms | 11.4 ms | 153.9 ms | 64,972 | 16.0 MiB |
+| HawkEye 7.2.0 | 3.8 ms | 21.5 ms | 243.9 ms | 40,997 | 6.9 MiB |
+| License Eye 0.9.0 | 19.5 ms | 262.0 ms | 2339.7 ms | 4,274 | 61.7 MiB |
+| NWA 0.8.0 | 5.2 ms | 47.7 ms | 624.5 ms | 16,014 | 49.7 MiB |
 
 ### Different check scopes
 
 | Tool | 10 files | 1,000 files | 10,000 files | Bulk files/s | Peak RSS |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| addlicense 1.2.0 | 2.9 ms | 45.2 ms | 434.6 ms | 23,012 | 33.7 MiB |
-| REUSE 6.2.0 | 335.0 ms | 406.2 ms | 839.5 ms | 11,911 | 98.4 MiB |
+| addlicense 1.2.0 | 3.0 ms | 12.0 ms | 424.6 ms | 23,551 | 24.0 MiB |
+| REUSE 6.2.0 | 333.0 ms | 400.1 ms | 811.0 ms | 12,331 | 98.8 MiB |
 
 addlicense does less validation. REUSE also checks per-file declarations and
 license texts. Compare these costs with the work you need; the rows do not
