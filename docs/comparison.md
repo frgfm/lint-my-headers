@@ -26,15 +26,17 @@ every tool or a ranking of their safety or speed.
 
 ## When Lint My Headers fits
 
-LMH fits repositories that already use its supported prose-header layout and
-want read-only checks plus limited year repairs. Version **0.7.0** supports
-**Python, JavaScript, TypeScript, Rust, Go, Swift, Bash, C, and C++**. Select the
-languages in your policy; the default is Python.
+The LMH details here describe published version **0.7.0**. It fits repositories
+that already use its prose-header layout and want read-only checks plus limited
+year repairs. See [supported languages](configuration.md#supported-languages)
+for the language list and [header layouts](configuration.md#header-layouts)
+for current source behavior. Select the languages in your policy; the default
+is Python.
 
 Its [configuration guide](configuration.md#header-layouts) specifies the exact
 copyright line, notice text, separators, and language preambles. Bash and Python
-use `#`; the other supported languages use ordinary `//` comments. Leading
-copyright-bearing block/doc comments refuse repair. Set source paths and
+use `#`; the other supported languages use line `//` comments. Version 0.7.0
+refuses repair of leading copyright-bearing block/doc comments. Set source paths and
 exclusions explicitly; LMH does not apply `.gitignore` rules.
 
 Missing headers require manual insertion and review. Ownership, licensing, and

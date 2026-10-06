@@ -45,15 +45,15 @@ same explicit policy.
 
 Choose the tool that fits the changes your project needs:
 
-| Tool | Best fit | Changes it can make |
-| --- | --- | --- |
-| **Lint My Headers** | Check an explicit header policy across nine languages. | Refresh one recognized stale year; preserve every other byte and file mode. |
-| [HawkEye](https://github.com/fast/hawkeye) | Check and format headers with configurable comment styles and templates. | Add, replace, or remove recognized headers. |
-| [addlicense](https://github.com/google/addlicense) | Add missing headers and check their presence. | Insert headers; leave recognized existing headers in place. |
-| [License Eye](https://github.com/apache/skywalking-eyes) | Check headers and resolve or check dependency licenses. | Add missing headers; generate dependency-license summaries. |
-| [REUSE](https://reuse.software/tutorial/) | Record per-file licensing and check the REUSE convention. | Add SPDX declarations and download license texts. |
-| [licenseheaders](https://github.com/johann-petrak/licenseheaders) | Apply header templates or replace copyright years. | Add or replace headers, or replace their years. |
-| [NWA](https://github.com/B1NARY-GR0UP/nwa) | Manage headers with templates, patterns, and configurable comment styles. | Add, update, or remove headers. |
+| Tool | Use it for |
+| --- | --- |
+| **Lint My Headers** | Check a declared header policy and refresh stale years. |
+| [HawkEye](https://github.com/fast/hawkeye) | Apply and format header templates. |
+| [addlicense](https://github.com/google/addlicense) | Add missing headers and check their presence. |
+| [License Eye](https://github.com/apache/skywalking-eyes) | Check headers and dependency licenses. |
+| [REUSE](https://reuse.software/tutorial/) | Record per-file licensing and check the REUSE convention. |
+| [licenseheaders](https://github.com/johann-petrak/licenseheaders) | Apply templates or replace copyright years. |
+| [NWA](https://github.com/B1NARY-GR0UP/nwa) | Add, check, update, or remove headers. |
 
 LMH reports missing headers for manual review. It does not insert headers, choose
 a license, check dependency licenses, or establish REUSE compliance. See the
