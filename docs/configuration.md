@@ -115,7 +115,8 @@ The license notice must still match the policy, with one blank line between it
 and the copyright. Commented blank lines such as `//` or ` *` are accepted.
 
 For languages that use `//`, an ordinary `/* ... */` block may contain the
-whole header. A leading `*` on each content line is optional. Python and Bash
+whole header. The closing `*/` may follow the final notice on the same line.
+A leading `*` on each content line is optional. Python and Bash
 continue to use `#` comments. For example, with `owner = "Example Organization"`
 and `license = "Apache-2.0"`:
 
@@ -143,9 +144,12 @@ value = 1
 The same pair works in `//` comments or an ordinary block. A prose copyright
 line with an SPDX license identifier is also accepted. A custom `license-notice`
 may declare the exact SPDX field instead; it does not enable expression parsing.
-Do not mix prose license text into the SPDX pair. Separate later line-comment
+An existing prose header may also contain one SPDX identifier after its notice;
+both the full notice and the identifier must match the declared policy.
+Do not add prose license text to an SPDX-only pair. Separate later line-comment
 notes from the pair with a blank line; an SPDX block contains only the pair and
-optional blank lines.
+optional blank lines. A separate SPDX tag or prose license notice in the leading
+comments also needs review, even after a blank line or outside the chosen block.
 
 Multiple copyright fields, duplicate license identifiers, nested legal blocks,
 documentation comments, and mixed or malformed declarations refuse repair.

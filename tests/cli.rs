@@ -109,6 +109,18 @@ fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs(
             originals.push((name, contents));
         }
     }
+    let prose = header(year() - 2)
+        .replacen("Copyright (C)", "Copyright", 1)
+        .replacen(&format!(", {OWNER}."), &format!(" {OWNER}"), 1);
+    let block = format!(
+        "/*\nCopyright {} {OWNER}\n\n{} */\nint value = 1;\n",
+        year() - 2,
+        NOTICE.replace("# ", "").trim_end_matches('\n')
+    );
+    for (name, contents) in [("src/prose.py", prose), ("src/prose_block.c", block)] {
+        write(root, name, &contents);
+        originals.push((name.to_string(), contents));
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -155,6 +167,78 @@ fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs(
     }
     assert_eq!(json_run(root, &["check"], 0)["diagnostics"], json!([]));
     assert_eq!(json_run(root, &["fix"], 0)["changed"], json!([]));
+
+    for years in [year() - 2, year()] {
+        let matching = format!(
+            "{}# SPDX-License-Identifier: Apache-2.0\n\nvalue = 1\n",
+            header(years).split("value =").next().unwrap()
+        );
+        write(root, "src/prose_with_id.py", &matching);
+        let checked = json_run(
+            root,
+            &["check", "src/prose_with_id.py"],
+            i32::from(years != year()),
+        );
+        assert_eq!(
+            checked["diagnostics"].as_array().unwrap().len(),
+            usize::from(years != year())
+        );
+        let fixed = json_run(root, &["fix", "src/prose_with_id.py"], 0);
+        assert_eq!(
+            fixed["changed"].as_array().unwrap().len(),
+            usize::from(years != year())
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("src/prose_with_id.py")).unwrap(),
+            if years == year() {
+                matching.clone()
+            } else {
+                matching.replacen(&years.to_string(), &format!("{years}-{}", year()), 1)
+            }
+        );
+        for (name, contents) in [
+            (
+                "src/mixed.py",
+                format!(
+                    "# SPDX-FileCopyrightText: {years} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n\n# This program is licensed under the MIT License.\nvalue = 1\n"
+                ),
+            ),
+            (
+                "src/mixed.c",
+                format!(
+                    "/*\n{}*/\n// SPDX-License-Identifier: MIT\nint value = 1;\n",
+                    header(years)
+                        .split("value =")
+                        .next()
+                        .unwrap()
+                        .replace("# ", "")
+                ),
+            ),
+        ] {
+            write(root, name, &contents);
+            let checked = json_run(root, &["check", name], 1);
+            assert_eq!(checked["diagnostics"][0]["code"], "LMH006");
+            let fixed = json_run(root, &["fix", name], 1);
+            assert_eq!(fixed["changed"], json!([]));
+            assert_eq!(fixed["diagnostics"][0]["code"], "LMH006");
+            assert_eq!(fs::read_to_string(root.join(name)).unwrap(), contents);
+        }
+    }
+
+    let wrong_id = header(year() - 2)
+        .split("value =")
+        .next()
+        .unwrap()
+        .to_string()
+        + "# SPDX-License-Identifier: MIT\n";
+    write(root, "src/wrong_id.py", &wrong_id);
+    let fixed = json_run(root, &["fix", "src/wrong_id.py"], 1);
+    assert_eq!(fixed["diagnostics"][0]["code"], "LMH005");
+    assert_eq!(fixed["changed"], json!([]));
+    assert_eq!(
+        fs::read_to_string(root.join("src/wrong_id.py")).unwrap(),
+        wrong_id
+    );
 
     let linked = format!(
         "# SPDX-FileCopyrightText: {} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n",
