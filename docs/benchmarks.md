@@ -4,6 +4,11 @@ description: Measured check overhead, full-codebase year repair time and peak me
 
 # What will header maintenance cost?
 
+This page records the earlier Linux LMH/HawkEye source benchmark. The new
+[tool comparison](comparison.md#latency-throughput-and-memory) measures published
+CLI checks, throughput, peak process memory and installation payloads on macOS.
+The two snapshots use different workloads and hardware.
+
 A check adds its measured runtime to a serial development workflow. A full year
 refresh takes the repair time below when every selected file has an eligible
 stale header. Missing or conflicting headers still need review. Select a chart
