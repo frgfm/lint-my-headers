@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: Existing release tag to benchmark and upload assets to (optional)
+        description: Existing release tag to benchmark (optional)
         type: string
         required: false
 permissions:
@@ -14,8 +14,6 @@ jobs:
   snapshot:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -23,23 +21,15 @@ jobs:
           persist-credentials: false
       - run: sudo apt-get update && sudo apt-get install -y jq gnuplot-nox
       - run: bash scripts/benchmark.sh --render docs/assets/benchmarks/results.csv --output target/bench
-      - name: Publish recorded benchmark assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SNAPSHOT_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          LC_ALL: C
-        run: |
-          tag="benchmark-$(cat scripts/benchmark.{sh,gnuplot} docs/assets/benchmarks/* | sha256sum | cut -c1-12)"
-          cp docs/assets/benchmarks/*.csv target/bench/
-          printf 'Recorded native benchmarks from PR #%s. Data and environment are in the attached files. This is a benchmark snapshot, not a software release.\n' "$PR_NUMBER" > target/bench/notes.md
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --target "$SNAPSHOT_SHA" --prerelease --latest=false --title "Benchmark snapshot (PR #$PR_NUMBER)" --notes-file target/bench/notes.md
-          gh release upload "$tag" target/bench/*.{png,svg,csv,json,html} --clobber
+      - run: cp docs/assets/benchmarks/*.csv target/bench/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark
+          path: target/bench/
+          if-no-files-found: error
   benchmark:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,8 +46,3 @@ jobs:
           name: benchmark
           path: target/bench/
           if-no-files-found: error
-      - if: inputs.release != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release }}
-        run: gh release upload "$RELEASE_TAG" target/bench/*

@@ -14,7 +14,7 @@ relative gap at that codebase size; labels show median time in milliseconds.
 
 ## How much waiting does a check add?
 
-[![Native check latency across codebase sizes](https://github.com/frgfm/lint-my-headers/releases/download/benchmark-5152bf26fb17/check.png)](https://github.com/frgfm/lint-my-headers/releases/download/benchmark-5152bf26fb17/check.png)
+[![Native check latency across codebase sizes](https://github.com/user-attachments/assets/6bee81a7-b77a-4614-915f-b10582d43117)](https://github.com/user-attachments/assets/6bee81a7-b77a-4614-915f-b10582d43117)
 
 For **10,000 mixed-language files**, a routine check adds **36 ms** in this run: **0.36%** on top of a 10-second serial workflow. A check reporting 10,000 stale headers takes **62 ms**.
 
@@ -30,7 +30,7 @@ Installation, hook orchestration and CI queueing are outside these measurements.
 
 ## How long will an entire codebase take to fix?
 
-[![Time to repair stale years across a codebase](https://github.com/frgfm/lint-my-headers/releases/download/benchmark-5152bf26fb17/fix.png)](https://github.com/frgfm/lint-my-headers/releases/download/benchmark-5152bf26fb17/fix.png)
+[![Time to repair stale years across a codebase](https://github.com/user-attachments/assets/d922e29b-0c26-489d-9476-cafa90ba90b6)](https://github.com/user-attachments/assets/d922e29b-0c26-489d-9476-cafa90ba90b6)
 
 Repairing stale years in all **10,000 files** takes **147 ms**, down from **428 ms** in the previous LMH. HawkEye takes **125 ms**: LMH wins the two check cases here; its repair median remains **17.6% slower**.
 
@@ -50,7 +50,7 @@ audit uses five timings and three RSS runs after warmup. See the
 
 ## How much memory does it need?
 
-[![Peak native process memory across languages](https://github.com/frgfm/lint-my-headers/releases/download/benchmark-5152bf26fb17/memory.png)](https://github.com/frgfm/lint-my-headers/releases/download/benchmark-5152bf26fb17/memory.png)
+[![Peak native process memory across languages](https://github.com/user-attachments/assets/7af2c002-ef3a-4910-aac2-c93bc64e826d)](https://github.com/user-attachments/assets/7af2c002-ef3a-4910-aac2-c93bc64e826d)
 
 Memory is peak native-process RSS, excluding the benchmark driver and compilation.
 Worker threads increase check memory; planning edits before allocating replacement
@@ -134,9 +134,11 @@ directory on your codebase's filesystem to include its write costs. On Linux,
 prefix the benchmark command with `taskset -c CPU` using one allowed CPU to
 compare both tools on one CPU. `--help` lists all options.
 
-Charts and the HTML report are GitHub release assets on a dedicated benchmark
-prerelease; only small CSVs and environment metadata live in Git. The
+Charts and the [archived report and data](https://github.com/user-attachments/files/33177377/benchmark-5152bf26fb17.zip)
+are browser uploads attached to PR #103. Only small CSVs and environment metadata live in Git. The
 [benchmark workflow](https://github.com/frgfm/lint-my-headers/actions/workflows/benchmark.yml)
-renders committed snapshots on same-repository PRs and publishes their assets.
-Its manual run measures the full suite and uploads a GitHub Actions artifact;
-the optional `release` tag attaches that run to a selected existing release.
+renders committed snapshots on same-repository PRs and saves GitHub Actions artifacts.
+Its manual run measures the full suite and saves the same artifact type;
+the optional `release` tag selects the version to benchmark. For durable PR
+attachments, download the artifact and use the PR's browser uploader. Benchmark
+runs do not create releases or upload release assets.
