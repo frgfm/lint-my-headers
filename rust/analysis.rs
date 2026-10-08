@@ -395,7 +395,11 @@ fn prose_license_count(text: &str) -> usize {
             let text = line.trim_start_matches([' ', '\t', '#', '/', '*', '!']);
             !is_copyright(text)
                 && !text.starts_with("SPDX-License-Identifier:")
-                && (text
+                // Canonical notice lines need no lowercase copy or keyword scan.
+                && (text.starts_with("This program is licensed under ")
+                    || text.starts_with("Licensed under ")
+                    || text.starts_with("See LICENSE or go to ")
+                    || text
                     // Mentions of a field name inside ordinary text are not declarations.
                     .split("SPDX-License-Identifier:")
                     .any(mentions_licensing)
