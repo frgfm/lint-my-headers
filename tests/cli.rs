@@ -63,482 +63,115 @@ fn json_run(root: &Path, args: &[&str], exit: i32) -> Value {
 }
 
 #[test]
-fn missing_headers_use_explicit_policy_and_the_existing_guarded_writer() {
+fn insertion_requires_a_declared_year_and_check_never_writes() {
     let dir = workspace();
     let root = dir.path();
-    write(
-        root,
-        "pyproject.toml",
-        format!(
-            "{CONFIG}languages = ['python', 'javascript', 'typescript', 'rust', 'go', 'swift', 'bash', 'c', 'cpp']\n"
-        ),
-    );
-    let originals: Vec<_> = [
-        (
-            "py",
-            "#!/usr/bin/python\r\n# coding: utf-8\r\nvalue = 'café'\r\n",
-        ),
-        (
-            "js",
-            "#!/usr/bin/env node\r\n'use strict';\r\nconst value = 1;\r\n",
-        ),
-        ("ts", "const value: number = 1;\r\n"),
-        ("rs", "#![no_std]\r\nconst VALUE: i32 = 1;\r\n"),
-        ("go", "//go:build linux\r\n\r\npackage example\r\n"),
-        (
-            "swift",
-            "// swift-tools-version: 6.0\r\nimport PackageDescription\r\n",
-        ),
-        ("sh", "#!/bin/bash\r\necho café\r\n"),
-        ("c", "#pragma once\r\nint value = 1;\r\n"),
-        ("cpp", "#include <vector>\r\nint value = 1;\r\n"),
-    ]
-    .into_iter()
-    .map(|(extension, body)| {
-        let name = format!("src/missing.{extension}");
-        let body = format!("\u{feff}{body}");
-        write(root, &name, &body);
-        (name, body)
-    })
-    .collect();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(
-            root.join("src/missing.sh"),
-            fs::Permissions::from_mode(0o755),
-        )
-        .unwrap();
-    }
-    let without_year = json_run(root, &["fix"], 1);
-    assert_eq!(without_year["changed"], json!([]));
-    assert!(
-        without_year["diagnostics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|d| d["code"] == "LMH001" && d["fixable"] == false)
-    );
+    let body = "value = 'café'\n";
+    write(root, "src/missing.py", body);
+    let unresolved = json_run(root, &["fix"], 1);
+    assert_eq!(unresolved["changed"], json!([]));
+    assert_eq!(unresolved["diagnostics"][0]["code"], "LMH001");
+    assert_eq!(unresolved["diagnostics"][0]["fixable"], false);
     let declared = (year() - 2).to_string();
     let checked = json_run(root, &["check", "--creation-year", &declared], 1);
     assert_eq!(checked["schema_version"], 1);
-    assert!(
-        checked["diagnostics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|d| d["code"] == "LMH001" && d["fixable"] == true)
-    );
-    for (name, bytes) in &originals {
-        assert_eq!(fs::read_to_string(root.join(name)).unwrap(), *bytes);
-    }
-    let fixed = json_run(root, &["fix", "--creation-year", &declared], 0);
-    assert_eq!(fixed["changed"].as_array().unwrap().len(), originals.len());
-    for (name, body) in originals {
-        let bytes = fs::read(root.join(&name)).unwrap();
-        assert!(bytes.starts_with(b"\xef\xbb\xbf"));
-        let text = String::from_utf8(bytes).unwrap();
-        assert!(text.contains(&format!("Copyright (C) {declared}-{}, {OWNER}.", year())));
-        assert!(text.contains("\r\n\r\n"));
-        let code = body
-            .rsplit_once("\r\n")
-            .unwrap()
-            .0
-            .rsplit_once("\r\n")
-            .map_or(
-                body.trim_start_matches('\u{feff}').trim_end_matches("\r\n"),
-                |(_, code)| code,
-            );
-        assert!(text.ends_with(&format!("{code}\r\n")), "{name}");
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(root.join("src/missing.sh"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o755
-        );
-    }
-    assert_eq!(json_run(root, &["check"], 0)["diagnostics"], json!([]));
+    assert_eq!(checked["diagnostics"][0]["fixable"], true);
     assert_eq!(
-        json_run(root, &["fix", "--creation-year", &declared], 0)["changed"],
-        json!([])
+        fs::read_to_string(root.join("src/missing.py")).unwrap(),
+        body
     );
-}
-
-#[test]
-fn creation_year_configuration_and_errors_are_resolved_before_writes() {
-    let dir = workspace();
-    let root = dir.path();
-    let body = "value = 1\n";
-    write(root, "src/missing.py", body);
-    for bad in [
-        "'2024'".to_string(),
-        "999".to_string(),
-        "2021".to_string(),
-        (year() + 1).to_string(),
-    ] {
-        write(
-            root,
-            "pyproject.toml",
-            format!("{CONFIG}creation-year = {bad}\n"),
-        );
-        let result = json_run(root, &["fix"], 2);
-        assert_eq!(result["changed"], json!([]));
-        assert_eq!(
-            fs::read_to_string(root.join("src/missing.py")).unwrap(),
-            body
-        );
-    }
     write(
         root,
         "pyproject.toml",
-        format!("{CONFIG}creation-year = {}\n", year() - 2),
+        format!("{CONFIG}creation-year = {declared}\n"),
     );
     let current = year().to_string();
-    json_run(root, &["fix", "--creation-year", &current], 0);
-    let fixed = fs::read_to_string(root.join("src/missing.py")).unwrap();
-    assert!(fixed.starts_with(&format!("# Copyright (C) {current}, {OWNER}.\n")));
-    assert!(!fixed.contains(&format!("{}-{current}", year() - 2)));
+    let fixed = json_run(root, &["fix", "--creation-year", &current], 0);
+    assert_eq!(fixed["changed"], json!(["src/missing.py"]));
+    assert_eq!(
+        fs::read_to_string(root.join("src/missing.py")).unwrap(),
+        header(year())
+    );
+    json_run(root, &["check"], 0);
+    assert_eq!(json_run(root, &["fix"], 0)["changed"], json!([]));
 }
 
-#[cfg(unix)]
 #[test]
-fn missing_header_insertion_refuses_links_and_keeps_other_owners() {
-    use std::os::unix::fs::symlink;
+fn new_layouts_repair_exact_bytes_and_refused_headers_never_write() {
     let dir = workspace();
     let root = dir.path();
     write(
         root,
         "pyproject.toml",
-        format!("{CONFIG}creation-year = {}\n", year()),
+        format!("{CONFIG}languages = ['python', 'c']\n"),
     );
-    write(root, "src/linked.py", "value = 1\n");
-    fs::hard_link(root.join("src/linked.py"), root.join("src/alias.py")).unwrap();
-    symlink(root.join("src/linked.py"), root.join("src/symlink.py")).unwrap();
-    let other = source(year(), "Other Owner", NOTICE);
-    write(root, "src/other.py", &other);
-    let before: Vec<_> = ["linked.py", "alias.py", "symlink.py", "other.py"]
-        .into_iter()
-        .map(|name| (name, fs::read(root.join("src").join(name)).unwrap()))
-        .collect();
-    let checked = json_run(root, &["check"], 1);
-    assert!(
-        checked["diagnostics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|d| d["fixable"] == false)
-    );
-    let fixed = json_run(root, &["fix"], 1);
-    assert_eq!(fixed["changed"], json!([]));
-    for (name, bytes) in before {
-        assert_eq!(fs::read(root.join("src").join(name)).unwrap(), bytes);
-    }
-}
-
-#[test]
-fn missing_header_insertion_keeps_existing_legal_text_and_unsupported_docstrings_unchanged() {
-    let dir = workspace();
-    let root = dir.path();
-    write(
-        root,
-        "pyproject.toml",
-        format!("{CONFIG}creation-year = {}\n", year()),
-    );
-    let originals = [
+    let first = year() - 2;
+    let spdx =
+        format!("SPDX-FileCopyrightText: {first} {OWNER}\nSPDX-License-Identifier: Apache-2.0\n");
+    for (name, contents) in [
         (
-            "parenthesized.py",
-            "(\"Copyright 2024 Other Owner\")\nvalue = 1\n",
+            "src/plain.py",
+            header(first).replace("Copyright (C)", "Copyright"),
         ),
         (
-            "joined.py",
-            "\"Copy\" \"right 2024 Other Owner\"\nvalue = 1\n",
+            "src/spdx.py",
+            format!(
+                "{}\nvalue = 1\n",
+                spdx.lines()
+                    .map(|line| format!("# {line}\n"))
+                    .collect::<String>()
+            ),
         ),
-        (
-            "escaped.py",
-            "\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-        ),
-        ("later.py", "value = 1\n# Copyright 2024 Other Owner\n"),
-        ("symbol.py", "# © 2024 Other Owner\nvalue = 1\n"),
-        ("license_variable.py", "license = 'example'\n"),
-        ("attribution.py", "# (c) 2024 Other Owner\nvalue = 1\n"),
-        ("rights.py", "# All rights reserved.\nvalue = 1\n"),
-        (
-            "bytes.py",
-            "b\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-        ),
-        (
-            "formatted.py",
-            "f\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-        ),
-        (
-            "joined_formatted.py",
-            "\"Copy\" f\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-        ),
-        (
-            "joined_bytes.py",
-            "b\"Copy\" b\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-        ),
-        (
-            "interpolated.py",
-            "f\"{'Copy'}right 2024 Other Owner\"\nvalue = 1\n",
-        ),
-        (
-            "attribute.rs",
-            "#![no_std]\n// Copyright 2024 Other Owner\n",
-        ),
-        (
-            "literal.py",
-            "f\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
-        ),
-    ];
-    for (name, body) in originals {
-        write(root, &format!("src/{name}"), body);
-    }
-    let fixed = json_run(root, &["fix"], 1);
-    assert_eq!(fixed["changed"], json!([]));
-    assert!(
-        fixed["diagnostics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|d| { d["code"] == "LMH001" && d["fixable"] == false })
-    );
-    assert!(fixed["diagnostics"].as_array().unwrap().iter().all(|d| {
-        d["message"]
-            .as_str()
-            .unwrap()
-            .contains("manual review required")
-    }));
-    for (name, body) in originals {
+        ("src/block.c", format!("/*\n{spdx}*/\n\nint value = 1;\n")),
+    ] {
+        let original = format!("\u{feff}{contents}").replace('\n', "\r\n");
+        write(root, name, &original);
+        let checked = json_run(root, &["check", name], 1);
+        assert_eq!(checked["diagnostics"][0]["code"], "LMH004");
+        assert_eq!(checked["diagnostics"][0]["fixable"], true);
+        assert_eq!(fs::read_to_string(root.join(name)).unwrap(), original);
+        assert_eq!(json_run(root, &["fix", name], 0)["changed"], json!([name]));
         assert_eq!(
-            fs::read_to_string(root.join("src").join(name)).unwrap(),
+            fs::read_to_string(root.join(name)).unwrap(),
+            original.replacen(&first.to_string(), &format!("{first}-{}", year()), 1)
+        );
+        json_run(root, &["check", name], 0);
+    }
+    let current = year().to_string();
+    for (body, code) in [
+        (
+            format!(
+                "# SPDX-FileCopyrightText: {first} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n\n# This file is licensed under the MIT License.\nvalue = 1\n"
+            ),
+            "LMH006",
+        ),
+        (
+            "f\"Copy\\x72ight Other Owner\"\nvalue = 1\n".to_string(),
+            "LMH001",
+        ),
+    ] {
+        write(root, "src/refused.py", &body);
+        let result = json_run(
+            root,
+            &["fix", "--creation-year", &current, "src/refused.py"],
+            1,
+        );
+        assert_eq!(result["changed"], json!([]));
+        assert_eq!(result["diagnostics"][0]["code"], code);
+        assert_eq!(result["diagnostics"][0]["fixable"], false);
+        if code == "LMH001" {
+            assert!(
+                result["diagnostics"][0]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("manual review required")
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(root.join("src/refused.py")).unwrap(),
             body
         );
     }
-}
-
-#[test]
-fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs() {
-    let dir = workspace();
-    let root = dir.path();
-    write(
-        root,
-        "pyproject.toml",
-        format!(
-            "{CONFIG}languages = ['python', 'javascript', 'typescript', 'rust', 'go', 'swift', 'bash', 'c', 'cpp']\n"
-        ),
-    );
-    let mut originals = Vec::new();
-    for (extension, marker, body) in [
-        ("py", "#", "value = 'café'\n"),
-        ("js", "//", "const value = 'café';\n"),
-        ("ts", "//", "const value: string = 'café';\n"),
-        ("rs", "//", "const VALUE: &str = \"café\";\n"),
-        ("go", "//", "package example\nconst Value = \"café\"\n"),
-        ("swift", "//", "let value = \"café\"\n"),
-        ("sh", "#", "value='café'\n"),
-        ("c", "//", "const char *value = \"café\";\n"),
-        ("cpp", "//", "const char *value = \"café\";\n"),
-    ] {
-        let text = format!(
-            "SPDX-FileCopyrightText: {} {OWNER}\nSPDX-License-Identifier: Apache-2.0\n",
-            year() - 2
-        );
-        let mut layouts = vec![
-            text.lines()
-                .map(|line| format!("{marker} {line}\n"))
-                .collect::<String>(),
-        ];
-        if marker == "//" {
-            layouts.push(format!(
-                "/*\n{} */\n",
-                text.lines()
-                    .map(|line| format!(" * {line}\n"))
-                    .collect::<String>()
-            ));
-        }
-        for (index, layout) in layouts.into_iter().enumerate() {
-            let name = format!("src/layout_{index}.{extension}");
-            let contents = format!("\u{feff}{layout}\n{body}").replace('\n', "\r\n");
-            write(root, &name, &contents);
-            originals.push((name, contents));
-        }
-    }
-    let prose = header(year() - 2)
-        .replacen("Copyright (C)", "Copyright", 1)
-        .replacen(&format!(", {OWNER}."), &format!(" {OWNER}"), 1);
-    let block = format!(
-        "/*\nCopyright {} {OWNER}\n\n{} */\nint value = 1;\n",
-        year() - 2,
-        NOTICE.replace("# ", "").trim_end_matches('\n')
-    );
-    for (name, contents) in [("src/prose.py", prose), ("src/prose_block.c", block)] {
-        write(root, name, &contents);
-        originals.push((name.to_string(), contents));
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(
-            root.join("src/layout_0.sh"),
-            fs::Permissions::from_mode(0o755),
-        )
-        .unwrap();
-    }
-    let checked = json_run(root, &["check"], 1);
-    assert_eq!(checked["schema_version"], 1);
-    assert_eq!(checked["checked"], originals.len());
-    assert!(
-        checked["diagnostics"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|d| d["code"] == "LMH004" && d["fixable"] == true)
-    );
-    for (name, contents) in &originals {
-        assert_eq!(fs::read_to_string(root.join(name)).unwrap(), *contents);
-    }
-    let fixed = json_run(root, &["fix"], 0);
-    assert_eq!(fixed["changed"].as_array().unwrap().len(), originals.len());
-    for (name, contents) in originals {
-        let repaired = contents.replacen(
-            &(year() - 2).to_string(),
-            &format!("{}-{}", year() - 2, year()),
-            1,
-        );
-        assert_eq!(fs::read_to_string(root.join(name)).unwrap(), repaired);
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(root.join("src/layout_0.sh"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o755
-        );
-    }
-    assert_eq!(json_run(root, &["check"], 0)["diagnostics"], json!([]));
-    assert_eq!(json_run(root, &["fix"], 0)["changed"], json!([]));
-
-    for years in [year() - 2, year()] {
-        let matching = format!(
-            "{}# SPDX-License-Identifier: Apache-2.0\n\nvalue = 1\n",
-            header(years).split("value =").next().unwrap()
-        );
-        write(root, "src/prose_with_id.py", &matching);
-        let checked = json_run(
-            root,
-            &["check", "src/prose_with_id.py"],
-            i32::from(years != year()),
-        );
-        assert_eq!(
-            checked["diagnostics"].as_array().unwrap().len(),
-            usize::from(years != year())
-        );
-        let fixed = json_run(root, &["fix", "src/prose_with_id.py"], 0);
-        assert_eq!(
-            fixed["changed"].as_array().unwrap().len(),
-            usize::from(years != year())
-        );
-        assert_eq!(
-            fs::read_to_string(root.join("src/prose_with_id.py")).unwrap(),
-            if years == year() {
-                matching.clone()
-            } else {
-                matching.replacen(&years.to_string(), &format!("{years}-{}", year()), 1)
-            }
-        );
-        for (name, contents) in [
-            (
-                "src/mixed.py",
-                format!(
-                    "# SPDX-FileCopyrightText: {years} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n\n# This program is licensed under the MIT License.\nvalue = 1\n"
-                ),
-            ),
-            (
-                "src/mixed_file_notice.py",
-                format!(
-                    "# SPDX-FileCopyrightText: {years} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n\n# This file is licensed under the MIT License.\nvalue = 1\n"
-                ),
-            ),
-            (
-                "src/mixed_short_notice.c",
-                format!(
-                    "/*\nSPDX-FileCopyrightText: {years} {OWNER}\nSPDX-License-Identifier: Apache-2.0\n*/\n\n// License: MIT\nint value = 1;\n"
-                ),
-            ),
-            (
-                "src/mixed.c",
-                format!(
-                    "/*\n{}*/\n// SPDX-License-Identifier: MIT\nint value = 1;\n",
-                    header(years)
-                        .split("value =")
-                        .next()
-                        .unwrap()
-                        .replace("# ", "")
-                ),
-            ),
-            (
-                "src/prose_conflict.c",
-                format!(
-                    "/*\n{}*/ /* Licensed under the MIT License. */\nint value = 1;\n",
-                    header(years)
-                        .split("value =")
-                        .next()
-                        .unwrap()
-                        .replace("# ", "")
-                ),
-            ),
-        ] {
-            write(root, name, &contents);
-            let checked = json_run(root, &["check", name], 1);
-            assert_eq!(checked["diagnostics"][0]["code"], "LMH006");
-            let fixed = json_run(root, &["fix", name], 1);
-            assert_eq!(fixed["changed"], json!([]));
-            assert_eq!(fixed["diagnostics"][0]["code"], "LMH006");
-            assert_eq!(fs::read_to_string(root.join(name)).unwrap(), contents);
-        }
-    }
-
-    let wrong_id = header(year() - 2)
-        .split("value =")
-        .next()
-        .unwrap()
-        .to_string()
-        + "# SPDX-License-Identifier: MIT\n";
-    write(root, "src/wrong_id.py", &wrong_id);
-    let fixed = json_run(root, &["fix", "src/wrong_id.py"], 1);
-    assert_eq!(fixed["diagnostics"][0]["code"], "LMH005");
-    assert_eq!(fixed["changed"], json!([]));
-    assert_eq!(
-        fs::read_to_string(root.join("src/wrong_id.py")).unwrap(),
-        wrong_id
-    );
-
-    let linked = format!(
-        "# SPDX-FileCopyrightText: {} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n",
-        year() - 2
-    );
-    write(root, "src/linked.py", &linked);
-    fs::hard_link(root.join("src/linked.py"), root.join("src/alias.py")).unwrap();
-    let checked = json_run(root, &["check", "src/linked.py"], 1);
-    assert_eq!(checked["diagnostics"][0]["fixable"], false);
-    let fixed = json_run(root, &["fix", "src/linked.py"], 1);
-    assert_eq!(fixed["changed"], json!([]));
-    assert_eq!(fixed["diagnostics"][0]["code"], "LMH008");
-    assert_eq!(
-        fs::read_to_string(root.join("src/linked.py")).unwrap(),
-        linked
-    );
 }
 
 #[test]
@@ -1426,44 +1059,50 @@ fn python_preambles_and_string_examples_are_accepted() {
 fn fix_preserves_bytes_mode_and_is_idempotent() {
     let dir = workspace();
     let root = dir.path();
+    let first = year() - 2;
     write(
         root,
-        "notice.txt",
-        "# Proprietary.\n# All rights reserved.\n",
+        "pyproject.toml",
+        format!("{CONFIG}creation-year = {first}\n"),
     );
     let notice = "# Proprietary.\n# All rights reserved.\n";
-    let original = format!(
-        "\u{feff}#!/usr/bin/env python3\n# coding: utf-8\n\n{}",
-        source(year() - 2, OWNER, notice)
+    write(root, "notice.txt", notice);
+    let prefix = "\u{feff}#!/usr/bin/env python3\n# coding: utf-8\n\n";
+    let expected = format!(
+        "{prefix}{}",
+        source(format!("{first}-{}", year()), OWNER, notice)
     )
     .replace('\n', "\r\n");
-    let expected = original.replacen(
-        &format!("Copyright (C) {},", year() - 2),
-        &format!("Copyright (C) {}-{},", year() - 2, year()),
-        1,
-    );
-    write(root, "src/stale.py", &original);
-    let path = root.join("src/stale.py");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o754)).unwrap();
-    }
-    let result = json_run(root, &["fix", "--license-notice", "notice.txt"], 0);
-    assert_eq!(result["changed"], json!(["src/stale.py"]));
-    assert_eq!(fs::read(&path).unwrap(), expected.as_bytes());
-    let modified = fs::metadata(&path).unwrap().modified().unwrap();
-    let result = json_run(root, &["fix", "--license-notice", "notice.txt"], 0);
-    assert_eq!(result["changed"], json!([]));
-    assert_eq!(fs::read(&path).unwrap(), expected.as_bytes());
-    assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(path).unwrap().permissions().mode() & 0o777,
-            0o754
+    for body in [source(first, OWNER, notice), "value = 'café'\n".into()] {
+        write(
+            root,
+            "src/stale.py",
+            format!("{prefix}{body}").replace('\n', "\r\n"),
         );
+        let path = root.join("src/stale.py");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o754)).unwrap();
+        }
+        let result = json_run(root, &["fix", "--license-notice", "notice.txt"], 0);
+        assert_eq!(result["changed"], json!(["src/stale.py"]));
+        assert_eq!(fs::read(&path).unwrap(), expected.as_bytes());
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        assert_eq!(
+            json_run(root, &["fix", "--license-notice", "notice.txt"], 0)["changed"],
+            json!([])
+        );
+        assert_eq!(fs::read(&path).unwrap(), expected.as_bytes());
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(path).unwrap().permissions().mode() & 0o777,
+                0o754
+            );
+        }
     }
 }
 
@@ -1628,6 +1267,8 @@ fn invalid_config_is_rejected_before_any_write() {
         ("starting-year", "true"),
         ("starting-year", "2022.0"),
         ("starting-year", "999"),
+        ("creation-year", "'2024'"),
+        ("creation-year", "999"),
         ("license", "4"),
         ("license-notice", "false"),
         ("paths", "[]"),
@@ -1673,11 +1314,14 @@ fn invalid_config_is_rejected_before_any_write() {
             .contains("exactly one")
     );
     write(root, "pyproject.toml", CONFIG);
+    let future = (year() + 1).to_string();
     for args in [
         vec!["fix", "--folders", "src", "src/stale.py"],
         vec!["fix", "--license", "made-up-license"],
         vec!["fix", "--config", "missing.toml"],
         vec!["fix", "--owner", "bad\nowner"],
+        vec!["fix", "--creation-year", "2021"],
+        vec!["fix", "--creation-year", &future],
     ] {
         assert_eq!(json_run(root, &args, 2)["changed"], json!([]));
     }
@@ -1754,19 +1398,35 @@ fn display_paths_match_verbatim_and_regular_prefixes() {
 fn hardlinked_targets_are_readable_but_never_fixed() {
     let dir = workspace();
     let root = dir.path();
+    write(
+        root,
+        "pyproject.toml",
+        format!("{CONFIG}creation-year = {}\n", year()),
+    );
     let stale = header(year() - 2);
     write(root, "src/first.py", &stale);
     fs::hard_link(root.join("src/first.py"), root.join("src/second.py")).unwrap();
-    let check = json_run(root, &["check", "src/first.py"], 1);
-    assert_eq!(check["diagnostics"][0]["code"], "LMH004");
-    assert_eq!(check["diagnostics"][0]["fixable"], false);
-    let fixed = json_run(root, &["fix"], 1);
-    assert_eq!(fixed["changed"], json!([]));
-    for diagnostic in fixed["diagnostics"].as_array().unwrap() {
-        assert_eq!(diagnostic["code"], "LMH008");
-    }
-    for path in ["src/first.py", "src/second.py"] {
-        assert_eq!(fs::read_to_string(root.join(path)).unwrap(), stale);
+    let spdx = format!(
+        "# SPDX-FileCopyrightText: {} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n",
+        year() - 2
+    );
+    for (original, code) in [
+        (stale, "LMH004"),
+        (spdx, "LMH004"),
+        ("value = 1\n".into(), "LMH001"),
+    ] {
+        write(root, "src/first.py", &original);
+        let check = json_run(root, &["check", "src/first.py"], 1);
+        assert_eq!(check["diagnostics"][0]["code"], code);
+        assert_eq!(check["diagnostics"][0]["fixable"], false);
+        let fixed = json_run(root, &["fix"], 1);
+        assert_eq!(fixed["changed"], json!([]));
+        for diagnostic in fixed["diagnostics"].as_array().unwrap() {
+            assert_eq!(diagnostic["code"], "LMH008");
+        }
+        for path in ["src/first.py", "src/second.py"] {
+            assert_eq!(fs::read_to_string(root.join(path)).unwrap(), original);
+        }
     }
 }
 
@@ -1975,6 +1635,18 @@ fn symlinks_are_skipped_during_discovery_and_refused_during_fix() {
     let result = json_run(root, &["fix", "linked-root/target.py"], 1);
     assert_eq!(result["diagnostics"][0]["code"], "LMH008");
     assert_eq!(fs::read_to_string(target).unwrap(), stale);
+    write(root, "outside/target.py", "value = 1\n");
+    let current = year().to_string();
+    let result = json_run(
+        root,
+        &["fix", "--creation-year", &current, "src/link.py"],
+        1,
+    );
+    assert_eq!(result["diagnostics"][0]["code"], "LMH008");
+    assert_eq!(
+        fs::read_to_string(root.join("outside/target.py")).unwrap(),
+        "value = 1\n"
+    );
 }
 
 #[test]

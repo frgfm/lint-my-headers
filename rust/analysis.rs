@@ -1066,10 +1066,6 @@ mod tests {
             let raw = format!("\u{feff}{prefix}{body}")
                 .replace('\n', "\r\n")
                 .into_bytes();
-            let unchanged = analyze(&raw, &policy(), path);
-            assert_eq!(unchanged.diagnostic.as_ref().unwrap().code, "LMH001");
-            assert!(!unchanged.diagnostic.unwrap().fixable);
-            assert!(unchanged.replacement.is_none());
             let result = analyze(&raw, &insertion, path);
             assert!(result.diagnostic.as_ref().unwrap().fixable, "{path}");
             let language = Language::from_path(std::path::Path::new(path)).unwrap();
@@ -1106,95 +1102,66 @@ mod tests {
     fn missing_header_insertion_refuses_existing_legal_text_and_invalid_years() {
         let mut insertion = policy();
         insertion.creation_year = Some(2024);
-        for (path, raw) in [
-            ("file.py", "# copyright 2024 Other Owner\nvalue = 1\n"),
-            ("file.py", "# © 2024 Other Owner\nvalue = 1\n"),
-            ("file.py", "# (c) 2024 Other Owner\nvalue = 1\n"),
-            ("file.c", "/* (C) 2024 Other Owner */\nint value = 1;\n"),
-            ("file.py", "# All rights reserved.\nvalue = 1\n"),
-            ("file.py", "# SPDX-License-Identifier: MIT\nvalue = 1\n"),
-            ("file.py", "value = 1\n# Copyright 2024 Other Owner\n"),
-            (
-                "file.py",
-                "f\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
-            ),
-            (
-                "file.py",
-                "b\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
-            ),
-            (
-                "file.py",
-                "\"\"\"Copyright 2024 Other Owner.\"\"\"\nvalue = 1\n",
-            ),
-            ("file.py", "r'''Existing licence text.'''\nvalue = 1\n"),
-            ("file.py", "(\"Copyright 2024 Other Owner\")\nvalue = 1\n"),
-            (
-                "file.py",
-                "\"Copy\" \"right 2024 Other Owner\"\nvalue = 1\n",
-            ),
-            ("file.py", "\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n"),
-            (
-                "file.py",
-                "b\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-            ),
-            (
-                "file.py",
-                "f\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-            ),
-            (
-                "file.py",
-                "\"Copy\" f\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-            ),
-            (
-                "file.py",
-                "b\"Copy\" b\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
-            ),
-            (
-                "file.py",
-                "f\"{'Copy'}right 2024 Other Owner\"\nvalue = 1\n",
-            ),
-            (
-                "file.py",
-                "\"Copy\" \\\n\"right 2024 Other Owner\"\nvalue = 1\n",
-            ),
-            ("file.c", "/* Licensed to Other Owner. */\nint value = 1;\n"),
-            ("file.rs", "#![no_std]\n// Copyright 2024 Other Owner\n"),
-            ("file.cpp", "/* unfinished\nint value = 1;\n"),
+        for raw in [
+            "# copyright 2024 Other Owner\nvalue = 1\n",
+            "# © 2024 Other Owner\nvalue = 1\n",
+            "# (c) 2024 Other Owner\nvalue = 1\n",
+            "# All rights reserved.\nvalue = 1\n",
+            "# SPDX-License-Identifier: MIT\nvalue = 1\n",
+            "value = 1\n# Copyright 2024 Other Owner\n",
+            "f\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
+            "b\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
+            "\"\"\"Copyright 2024 Other Owner.\"\"\"\nvalue = 1\n",
+            "r'''Existing licence text.'''\nvalue = 1\n",
+            "(\"Copyright 2024 Other Owner\")\nvalue = 1\n",
+            "\"Copy\" \"right 2024 Other Owner\"\nvalue = 1\n",
+            "\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            "b\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            "f\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            "\"Copy\" f\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            "b\"Copy\" b\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            "f\"{'Copy'}right 2024 Other Owner\"\nvalue = 1\n",
+            "\"Copy\" \\\n\"right 2024 Other Owner\"\nvalue = 1\n",
         ] {
-            let result = analyze(raw.as_bytes(), &insertion, path);
-            assert!(result.replacement.is_none(), "{path}: {raw}");
-            assert!(!result.diagnostic.unwrap().fixable);
+            assert_refused(raw, &insertion, "file.py", "LMH001");
+        }
+        for (path, raw, code) in [
+            (
+                "file.c",
+                "/* (C) 2024 Other Owner */\nint value = 1;\n",
+                "LMH001",
+            ),
+            (
+                "file.c",
+                "/* Licensed to Other Owner. */\nint value = 1;\n",
+                "LMH001",
+            ),
+            (
+                "file.rs",
+                "#![no_std]\n// Copyright 2024 Other Owner\n",
+                "LMH001",
+            ),
+            ("file.cpp", "/* unfinished\nint value = 1;\n", "LMH006"),
+        ] {
+            assert_refused(raw, &insertion, path, code);
         }
         for year in [999, 2021, 2031, 10000] {
             insertion.creation_year = Some(year);
-            assert!(
-                analyze(b"value = 1\n", &insertion, "file.py")
-                    .replacement
-                    .is_none()
-            );
+            assert_refused("value = 1\n", &insertion, "file.py", "LMH001");
         }
         insertion.creation_year = Some(2024);
-        let ordinary = b"\"\"\"A useful module.\"\"\"\nvalue = 1\n";
-        assert!(
-            analyze(ordinary, &insertion, "file.py")
-                .replacement
-                .is_some()
-        );
-        assert!(
-            analyze(
-                b"int f(int c) { if (c) return 2024; return 0; }\n",
-                &insertion,
-                "file.c"
-            )
-            .replacement
-            .is_some()
-        );
+        for (path, raw) in [
+            ("file.py", "\"\"\"A useful module.\"\"\"\nvalue = 1\n"),
+            ("file.c", "int f(int c) { if (c) return 2024; return 0; }\n"),
+        ] {
+            assert!(
+                analyze(raw.as_bytes(), &insertion, path)
+                    .replacement
+                    .is_some()
+            );
+        }
         insertion.owner.push('\0');
-        assert!(
-            analyze(b"value = 1\n", &insertion, "file.py")
-                .replacement
-                .is_none()
-        );
+        assert_refused("value = 1\n", &insertion, "file.py", "LMH001");
     }
 
     #[test]
@@ -1233,6 +1200,31 @@ mod tests {
         analyze(source.as_ref(), &policy(), "x.py")
     }
 
+    fn assert_year_fix(raw: &str, policy: &HeaderPolicy, path: &str) {
+        let result = analyze(raw.as_bytes(), policy, path);
+        assert_eq!(result.diagnostic.unwrap().code, "LMH004", "{path}: {raw:?}");
+        let fixed = result.replacement.unwrap();
+        assert_eq!(
+            fixed,
+            raw.replacen("2024", "2024-2030", 1).as_bytes(),
+            "{path}: {raw:?}"
+        );
+        assert!(
+            analyze(&fixed, policy, path).diagnostic.is_none(),
+            "{path}: {raw:?}"
+        );
+    }
+
+    fn assert_refused(raw: &str, policy: &HeaderPolicy, path: &str, code: &str) {
+        let result = analyze(raw.as_bytes(), policy, path);
+        let diagnostic = result.diagnostic.unwrap();
+        assert_eq!(diagnostic.code, code, "{path}: {raw:?}");
+        assert!(
+            !diagnostic.fixable && result.replacement.is_none(),
+            "{path}: {raw:?}"
+        );
+    }
+
     #[test]
     fn common_prose_and_spdx_layouts_preserve_every_byte_except_the_year() {
         let mut policy = policy();
@@ -1262,89 +1254,57 @@ mod tests {
                     "{copyright}\n\nSPDX-License-Identifier: Apache-2.0\n"
                 )];
                 if copyright.starts_with("SPDX-") {
-                    headers.push(format!(
-                        "{copyright}\nSPDX-License-Identifier: Apache-2.0\n"
-                    ));
-                    headers.push(format!(
-                        "SPDX-License-Identifier: Apache-2.0\n{copyright}\n"
-                    ));
+                    headers.extend([
+                        format!("{copyright}\nSPDX-License-Identifier: Apache-2.0\n"),
+                        format!("SPDX-License-Identifier: Apache-2.0\n{copyright}\n"),
+                    ]);
                 } else {
-                    headers.push(format!("{copyright}\n\nLicense notice.\n"));
+                    headers.extend([
+                        format!("{copyright}\n\nLicense notice.\n"),
+                        format!("{copyright}\n\nLicense notice.\n\nSPDX-License-Identifier: Apache-2.0\n"),
+                    ]);
                 }
                 for text in headers {
                     let mut layouts = vec![render_header(&text, language)];
                     if language.comment() == "//" {
-                        layouts.push(format!(
-                            "/*\n{} */\n",
-                            text.lines()
-                                .map(|line| format!(" * {line}\n"))
-                                .collect::<String>()
-                        ));
-                        layouts.push(format!("/* {text}*/\n"));
-                        layouts.push(format!("/*\n{} */\n", text.trim_end_matches('\n')));
+                        let starred = text
+                            .lines()
+                            .map(|line| format!(" * {line}\n"))
+                            .collect::<String>();
+                        layouts.extend([
+                            format!("/*\n{starred} */\n"),
+                            format!("/* {text}*/\n"),
+                            format!("/*\n{} */\n", text.trim_end_matches('\n')),
+                        ]);
                     }
                     let notes = render_header(
                         "Note: SPDX-License-Identifier: is a keyword; SPDX-License-Identifier: here is not a field.\n",
                         language,
                     );
-                    layouts = layouts
-                        .into_iter()
-                        .flat_map(|layout| [layout.clone(), format!("{layout}\n{notes}")])
-                        .collect();
                     for layout in layouts {
-                        for preamble in ["", preamble] {
-                            for newline in ["\n", "\r\n"] {
-                                let raw = format!(
-                                "\u{feff}{preamble}{layout}\nbody = \"2024 Copyright Example Owner\"\n"
-                            )
-                            .replace('\n', newline);
-                                let result = analyze(raw.as_bytes(), &policy, path);
-                                assert_eq!(
-                                    result.diagnostic.as_ref().unwrap().code,
-                                    "LMH004",
-                                    "{path}: {raw:?}"
-                                );
-                                let fixed = result
-                                    .replacement
-                                    .unwrap_or_else(|| panic!("{path}: {raw:?}"));
-                                assert_eq!(fixed, raw.replacen("2024", "2024-2030", 1).as_bytes());
-                                assert!(
-                                    analyze(&fixed, &policy, path).diagnostic.is_none(),
-                                    "{path}: {raw:?}"
-                                );
+                        for suffix in [String::new(), format!("\n{notes}")] {
+                            for prefix in ["", preamble] {
+                                for newline in ["\n", "\r\n"] {
+                                    let raw = format!("\u{feff}{prefix}{layout}{suffix}\nbody = \"2024 Copyright Example Owner\"\n").replace('\n', newline);
+                                    assert_year_fix(&raw, &policy, path);
+                                }
                             }
                         }
                     }
                 }
             }
-            let mut custom = policy.clone();
-            custom.license_notices = vec!["License notice mentions SPDX-License-Identifier: twice: SPDX-License-Identifier:.\n".into()];
-            let raw = render_header(
-                &format!(
-                    "Copyright 2024 Example Owner\n\n{}",
-                    custom.license_notices[0]
-                ),
-                language,
-            );
-            let result = analyze(raw.as_bytes(), &custom, path);
-            assert_eq!(
-                result.replacement.unwrap(),
-                raw.replacen("2024", "2024-2030", 1).as_bytes()
-            );
-            custom.license_notices =
-                vec!["SPDX-License-Identifier: Apache-2.0\nSee LICENSE for full terms.\n".into()];
-            let raw = render_header(
-                &format!(
-                    "Copyright 2024 Example Owner\n\n{}",
-                    custom.license_notices[0]
-                ),
-                language,
-            );
-            let result = analyze(raw.as_bytes(), &custom, path);
-            assert_eq!(
-                result.replacement.unwrap(),
-                raw.replacen("2024", "2024-2030", 1).as_bytes()
-            );
+            for notice in [
+                "License notice mentions SPDX-License-Identifier: twice: SPDX-License-Identifier:.\n",
+                "SPDX-License-Identifier: Apache-2.0\nSee LICENSE for full terms.\n",
+            ] {
+                let mut custom = policy.clone();
+                custom.license_notices = vec![notice.into()];
+                let raw = render_header(
+                    &format!("Copyright 2024 Example Owner\n\n{notice}"),
+                    language,
+                );
+                assert_year_fix(&raw, &custom, path);
+            }
         }
     }
 
@@ -1354,23 +1314,32 @@ mod tests {
         policy
             .license_notices
             .push("SPDX-License-Identifier: Apache-2.0\n".into());
-        let text =
+        let spdx =
             "SPDX-FileCopyrightText: 2024 Example Owner\nSPDX-License-Identifier: Apache-2.0\n";
+        let prose = "Copyright 2024 Example Owner\n\nLicense notice.\n";
         for path in [
             "x.py", "x.js", "x.ts", "x.rs", "x.go", "x.swift", "x.sh", "x.c", "x.cpp",
         ] {
             let language = Language::from_path(std::path::Path::new(path)).unwrap();
-            let header = render_header(text, language);
+            let marker = language.comment();
+            let header = render_header(spdx, language);
             for (raw, code) in [
                 (header.replace("Example Owner", "Other Owner"), "LMH002"),
                 (header.replace("2024", "2031"), "LMH003"),
                 (header.replace("2024", "20x4"), "LMH006"),
                 (header.replace("Apache-2.0", "MIT"), "LMH005"),
                 (header.replace("Apache-2.0", "Apache-2.0 OR MIT"), "LMH005"),
+                (
+                    render_header(
+                        &format!("{prose}\nSPDX-License-Identifier: MIT\n"),
+                        language,
+                    ),
+                    "LMH005",
+                ),
                 (format!("{header}{header}"), "LMH006"),
                 (
                     render_header(
-                        &text.replace(
+                        &spdx.replace(
                             "SPDX-License-Identifier:",
                             "Wrong notice.\nSPDX-License-Identifier:",
                         ),
@@ -1379,112 +1348,59 @@ mod tests {
                     "LMH006",
                 ),
                 (
-                    format!(
-                        "{header}{} SPDX-FileCopyrightText: 2024 Other Owner\n",
-                        language.comment()
-                    ),
+                    format!("{header}{marker} SPDX-FileCopyrightText: 2024 Other Owner\n"),
                     "LMH006",
                 ),
                 (
-                    format!(
-                        "{header}\n{} This program is licensed under the MIT License.\n",
-                        language.comment()
-                    ),
-                    "LMH006",
-                ),
-                (
-                    format!(
-                        "{header}\n{} Licensed under the MIT License.\n",
-                        language.comment()
-                    ),
-                    "LMH006",
-                ),
-                (
-                    format!(
-                        "{header}\n{} This file is licensed under the MIT License.\n",
-                        language.comment()
-                    ),
-                    "LMH006",
-                ),
-                (
-                    format!("{header}\n{} License: MIT\n", language.comment()),
-                    "LMH006",
-                ),
-                (
-                    format!(
-                        "{header}\n{} Released under the MIT licence.\n",
-                        language.comment()
-                    ),
-                    "LMH006",
-                ),
-                (
-                    format!(
-                        "{header}{} SPDX-License-Identifier: Apache-2.0\n",
-                        language.comment()
-                    ),
+                    format!("{header}{marker} SPDX-License-Identifier: Apache-2.0\n"),
                     "LMH006",
                 ),
                 (header.replace('\n', "\r"), "LMH006"),
                 (format!("code\n{header}"), "LMH001"),
                 (
-                    format!(
-                        "{} SPDX-FileCopyrightText: 2024 Example Owner\n",
-                        language.comment()
-                    ),
+                    format!("{marker} SPDX-FileCopyrightText: 2024 Example Owner\n"),
                     "LMH005",
                 ),
             ] {
-                let result = analyze(raw.as_bytes(), &policy, path);
-                assert_eq!(result.diagnostic.unwrap().code, code, "{path}: {raw:?}");
-                assert!(result.replacement.is_none(), "{path}: {raw:?}");
+                assert_refused(&raw, &policy, path, code);
             }
-            if language.comment() == "//" {
-                let raw = format!("{header}/// SPDX-FileCopyrightText: 2024 Other Owner\n");
-                assert_eq!(
-                    analyze(raw.as_bytes(), &policy, path)
-                        .diagnostic
-                        .unwrap()
-                        .code,
-                    "LMH006"
-                );
-                for inner in [
-                    " SPDX-License-Identifier: Apache-2.0\n * an example Copyright line\n",
-                    " Copyright (C) 2024, Example Owner.\n\nLicense notice.\n/* nested */\n",
-                ] {
-                    let raw = format!("/*{inner}*/\n");
-                    let result = analyze(raw.as_bytes(), &policy, path);
-                    assert_eq!(result.diagnostic.unwrap().code, "LMH006", "{path}: {raw:?}");
-                    assert!(result.replacement.is_none());
+            for notice in [
+                "This program is licensed under the MIT License.",
+                "Licensed under the MIT License.",
+                "This file is licensed under the MIT License.",
+                "License: MIT",
+                "Released under the MIT licence.",
+            ] {
+                for year in ["2024", "2030"] {
+                    let raw = format!("{header}\n{marker} {notice}\n").replacen("2024", year, 1);
+                    assert_refused(&raw, &policy, path, "LMH006");
                 }
-                for text in [
-                    "Copyright 2024 Example Owner\n\nWrong notice.\nSPDX-License-Identifier: Apache-2.0\n",
-                    "Copyright 2024 Example Owner\nSPDX-License-Identifier: Apache-2.0\nWrong notice.\n",
-                ] {
-                    let raw = format!("/*\n{text}*/\n");
-                    let result = analyze(raw.as_bytes(), &policy, path);
-                    assert_eq!(result.diagnostic.unwrap().code, "LMH006", "{path}: {raw:?}");
-                    assert!(result.replacement.is_none());
+                if marker == "//" {
+                    for raw in [
+                        format!("{header}\n/* {notice} */\n"),
+                        format!("/*\n{spdx}*/\n// {notice}\n"),
+                        format!("/*\n{spdx}*/\n\n// {notice}\n"),
+                        format!("/*\n{prose}*/ /* {notice} */\n"),
+                        format!("/*\n{prose}{notice}\n*/\n"),
+                    ] {
+                        assert_refused(&raw, &policy, path, "LMH006");
+                    }
                 }
+            }
+            if marker == "//" {
                 for raw in [
-                    "/*\nCopyright 2024 Example Owner\n\nLicense notice.\n*/\n// SPDX-License-Identifier: MIT\n".to_string(),
-                    format!("/*\n{text}"),
-                    format!("{header}\n/* This program is licensed under the MIT License. */\n"),
-                    format!("/*\n{text}*/\n\n// License: MIT\n"),
-                    format!("/*\n{text}*/\n\n// This file is licensed under the MIT License.\n"),
-                    format!("/*\n{text}*/\n// Licensed under the MIT License.\n"),
-                    "/*\nCopyright 2024 Example Owner\n\nLicense notice.\nLicensed under the MIT License.\n*/\n".to_string(),
-                    "/*\nCopyright 2024 Example Owner\n\nLicense notice.\n*/ /* Licensed under the MIT License. */\n".to_string(),
-                    format!("/*\n{} */ /* Licensed under the MIT License. */\n", text.trim_end_matches('\n')),
+                    format!("{header}/// SPDX-FileCopyrightText: 2024 Other Owner\n"),
+                    "/* SPDX-License-Identifier: Apache-2.0\n * an example Copyright line\n*/\n".into(),
+                    "/* Copyright (C) 2024, Example Owner.\n\nLicense notice.\n/* nested */\n*/\n".into(),
+                    "/*\nCopyright 2024 Example Owner\n\nWrong notice.\nSPDX-License-Identifier: Apache-2.0\n*/\n".into(),
+                    "/*\nCopyright 2024 Example Owner\nSPDX-License-Identifier: Apache-2.0\nWrong notice.\n*/\n".into(),
+                    format!("/*\n{prose}*/\n// SPDX-License-Identifier: MIT\n"),
+                    format!("/*\n{spdx}"),
+                    format!("/*\n{} */ /* Licensed under the MIT License. */\n", spdx.trim_end_matches('\n')),
+                    format!("/**\n{spdx}*/\n"),
+                    format!("/*!\n{spdx}*/\n"),
                 ] {
-                    let result = analyze(raw.as_bytes(), &policy, path);
-                    assert_eq!(result.diagnostic.unwrap().code, "LMH006", "{path}: {raw:?}");
-                    assert!(result.replacement.is_none());
-                }
-                for prefix in ["/**", "/*!"] {
-                    let raw = format!("{prefix}\n{text}*/\n");
-                    let result = analyze(raw.as_bytes(), &policy, path);
-                    assert_eq!(result.diagnostic.unwrap().code, "LMH006");
-                    assert!(result.replacement.is_none());
+                    assert_refused(&raw, &policy, path, "LMH006");
                 }
             }
         }

@@ -10,6 +10,8 @@
 
 Runtime logic belongs in `rust/`; never add a second Python parser. Keep Cargo/PyPI versions aligned, preserve the SPDX snapshots, and retain the renamed agent skill and evaluation assets.
 
+Keep every PR's net diff to the smallest complete change. Reuse fixtures and test each parser case at its owning layer; CLI tests cover command and file-write contracts. Preserve unique safety regressions and check the diff size before handoff.
+
 `check` must never write. `fix` may refresh one recognized stale end year or insert a missing header only with an explicitly declared owner, notice, and creation year. Preserve existing source bytes and mode. Refuse ambiguous, symlinked, reparse-point, multi-link, or concurrently changed targets. Never infer an owner, license, starting year, creation year, or legal conclusion.
 
 Run before handoff:

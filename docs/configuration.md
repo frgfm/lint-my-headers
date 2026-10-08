@@ -106,62 +106,34 @@ no trailing newline.
 
 ### Additional layouts (unreleased)
 
-!!! info "Source checkout only"
+These layouts require the source checkout. Published **0.7.0** uses the prose
+layout above. Existing-header repairs still change only the end year.
 
-    These layouts are supported by the unreleased source checkout. Published
-    version **0.7.0** uses the prose layout above. Build the reviewed source
-    revision to use these additions; the year-only repair rules still apply.
+| Layout | Rules |
+| --- | --- |
+| Prose | `Copyright`, `Copyright (C)`, or `Copyright (c)`, followed by a four-digit year/range and the exact owner. Comma and final period are optional. Keep one blank or marker-only line before the matching notice. |
+| Ordinary block | Languages using `//` also accept the whole header inside `/* ... */`. Leading `*` markers are optional; the closing delimiter may follow the final notice. |
+| SPDX pair | One `SPDX-FileCopyrightText` and one `SPDX-License-Identifier`, in either order with optional blank lines. Owner and configured identifier must match exactly. Keep the local `LICENSE`. |
 
-Common prose copyright lines may use `Copyright`, `Copyright (C)`, or
-`Copyright (c)`, followed by one four-digit year or year range and the exact
-configured owner. A comma before the owner and a final period are optional.
-The license notice must still match the policy, with one blank line between it
-and the copyright. Commented blank lines such as `//` or ` *` are accepted.
-
-For languages that use `//`, an ordinary `/* ... */` block may contain the
-whole header. The closing `*/` may follow the final notice on the same line.
-A leading `*` on each content line is optional. Python and Bash
-continue to use `#` comments. For example, with `owner = "Example Organization"`
-and `license = "Apache-2.0"`:
+For example, with `owner = "Example Organization"` and `license = "Apache-2.0"`:
 
 ```c
 /*
- * Copyright 2024-2026 Example Organization
- *
- * This program is licensed under the Apache License 2.0.
- * See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
+ * SPDX-FileCopyrightText: 2024-2026 Example Organization
+ * SPDX-License-Identifier: Apache-2.0
  */
 ```
 
-An SPDX header may instead contain one `SPDX-FileCopyrightText` field and one
-`SPDX-License-Identifier` field. The owner must match exactly, and the identifier
-must match the configured `license`. Keep the local `LICENSE` file. The fields
-may appear in either order, with optional blank lines between them:
+The pair also works in line comments: `#` for Python/Bash, `//` for other
+languages. A prose copyright with an SPDX identifier is accepted, as is a full
+prose notice followed by a matching identifier. Custom notices must match in
+full, including text after any SPDX tag; compound expressions are not evaluated.
 
-```python
-# SPDX-FileCopyrightText: 2024-2026 Example Organization
-# SPDX-License-Identifier: Apache-2.0
-
-value = 1
-```
-
-The same pair works in `//` comments or an ordinary block. A prose copyright
-line with an SPDX license identifier is also accepted. A custom `license-notice`
-may declare the exact SPDX field instead; it does not enable expression parsing.
-Custom notices are checked in full, including any text after an SPDX tag.
-An existing prose header may also contain one SPDX identifier after its notice;
-both the full notice and the identifier must match the declared policy.
-Do not add prose license text to an SPDX-only pair. Separate later line-comment
-notes from the pair with a blank line; an SPDX block contains only the pair and
-optional blank lines. A separate SPDX tag or prose license notice in the leading
-comments also needs review, even after a blank line or outside the chosen block.
-
-Multiple copyright fields, duplicate license identifiers, nested legal blocks,
-documentation comments, and mixed or malformed declarations refuse repair.
-Multiple holders, omitted years, sidecar files, and `REUSE.toml` are outside this
-support. The `license` setting accepts one identifier; custom notices are matched
-as text, without evaluating compound expressions. Use REUSE for its full convention.
-LMH checks only the declared header policy and does not establish compliance.
+SPDX-only blocks contain only the pair and blank lines. Separate later
+line-comment notes with a blank line. Conflicting legal text anywhere in the
+leading comments, duplicate fields, nested legal blocks, and documentation
+comment headers refuse repair. Multiple holders, omitted years, sidecars, and
+`REUSE.toml` are unsupported. LMH checks declared policy, not legal compliance.
 
 ??? note "Python"
     UTF-8 BOM, shebang, and PEP 263 cookie are preserved. Verified encodings:

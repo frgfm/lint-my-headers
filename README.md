@@ -140,26 +140,20 @@ improvement. See [requirements and reproduction](docs/benchmarks.md#reproduce).
 
 ### Insert missing headers (unreleased)
 
-The source checkout can insert missing headers with your declared owner and
-license notice. Supply the file's actual first copyright year:
+The source checkout can insert your configured owner and notice. Declare the
+actual first copyright year for the selected files:
 
 ```shell
-lmh check --creation-year 2024 src/new_file.py
 lmh fix --creation-year 2024 src/new_file.py
 lmh check src/new_file.py
 git diff
 ```
 
-`creation-year` can also be set in project configuration. It applies to every
-selected missing header. `starting-year` remains the earliest allowed year and
-does not supply this value. Without a creation year, missing headers stay
-unresolved. Existing legal text and unsafe targets require review. Insertion
-keeps source bytes, encoding, preambles, line endings, and file mode. Published
-0.7.0 does not include this feature.
-
-Insertion refuses files containing `copyright`, `©`, `SPDX`, `license`, `licence`,
-or `all rights reserved` anywhere, including examples and variable names. Leading
-`(c)` year attributions also require review. `LMH001` explains blocked insertion.
+`creation-year` may also be configured; `starting-year` remains a validation
+floor. Insertion preserves existing bytes, encoding, preambles, and mode.
+Legal markers and unsafe or ambiguous files require review. See the
+[insertion rules](docs/getting-started.md#insert-a-missing-header-unreleased).
+Published 0.7.0 does not include this feature.
 
 Keep the policy in the file your project already uses:
 
