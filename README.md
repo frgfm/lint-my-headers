@@ -7,7 +7,7 @@
 <h1 align="center">Lint My Headers</h1>
 
 <p align="center">
-  <strong>Fast copyright and license header checks, powered by Rust.</strong><br>
+  <strong>Fast copyright and license header checks across nine languages, powered by Rust.</strong><br>
   One policy for your codebase. Clear findings. Small, reviewable repairs.
 </p>
 
@@ -41,24 +41,48 @@ same explicit policy.
 - **Fits your workflow.** First-party pre-commit/prek hook, GitHub Action, and stable JSON
   diagnostics for scripts and coding agents.
 
+## Compare header tools
+
+Choose by the checks and edits your project needs:
+
+| Tool | Check | Edits | Implementation |
+| --- | --- | --- | --- |
+| **Lint My Headers** | Declared owner, years, and notice. | One eligible end year. | Native Rust. |
+| [HawkEye](https://github.com/fast/hawkeye) | Header template. | Insert, rewrite, remove. | Native Rust. |
+| [addlicense](https://github.com/google/addlicense) | Header presence. | Insert missing headers. | Native Go. |
+| [License Eye](https://github.com/apache/skywalking-eyes) | Headers and dependency licenses. | Insert or rewrite; dependency summaries. | Native Go. |
+| [REUSE](https://reuse.software/tutorial/) | Per-file declarations and license texts. | Annotate copyright and licensing. | Python. |
+| [licenseheaders](https://github.com/johann-petrak/licenseheaders) | Edit dry run; no dedicated checker. | Templates or year fields. | Python. |
+| [NWA](https://github.com/B1NARY-GR0UP/nwa) | Header template. | Insert, rewrite, remove. | Native Go. |
+
+LMH keeps the creation year, other bytes, and file mode. Missing headers need
+manual insertion. It does not inspect dependency licenses or check the REUSE
+convention. The [full comparison](docs/comparison.md) covers SPDX/JSON support,
+behavior tests, runtime requirements, installation steps, and measured disk use.
+
 ## Performance
 
-On **10,000 mixed-language files** (1 KiB/file), the release CLI measured:
+Fresh CLI checks on **1 KiB Python files**, measured on an **Apple M3 Pro,
+macOS 15.7.7, APFS**. Seven trials after warmup; median latency and derived
+bulk throughput. Peak RSS is the highest process memory seen in seven separate
+10,000-file runs.
 
-| Task | LMH | HawkEye 7.2.0 |
-| --- | ---: | ---: |
-| Routine check | 36 ms | 76 ms |
-| Check stale headers | 62 ms | 76 ms |
-| Repair stale years | 147 ms | 125 ms |
+| Tool / check scope | 10 files | 10,000 files | Bulk files/s | Peak RSS |
+| --- | ---: | ---: | ---: | ---: |
+| LMH 0.7.0 / Policy | 4.7 ms | 153.9 ms | 64,972 | 16.0 MiB |
+| HawkEye 7.2.0 / Template | 3.8 ms | 243.9 ms | 40,997 | 6.9 MiB |
+| License Eye 0.9.0 / Template | 19.5 ms | 2339.7 ms | 4,274 | 61.7 MiB |
+| NWA 0.8.0 / Template | 5.2 ms | 624.5 ms | 16,014 | 49.7 MiB |
+| addlicense 1.2.0 / Presence | 3.0 ms | 424.6 ms | 23,551 | 24.0 MiB |
+| REUSE 6.2.0 / REUSE audit | 333.0 ms | 811.0 ms | 12,331 | 98.8 MiB |
 
-Five timing trials after warmup on the same shared Linux runner. Both tools receive
-the same CPU budget; LMH uses up to four available workers for large trees.
+These commands do different work. addlicense checks presence; REUSE also checks
+declarations and license texts. REUSE's RSS does not sum its parallel workers.
+Compiler names alone do not predict speed. Hook setup and cold storage are excluded.
 
-![Native check latency](https://github.com/frgfm/lint-my-headers/releases/download/benchmark-5152bf26fb17/check.png)
-
-See the [performance guide](docs/benchmarks.md) for repair time, peak memory,
-all nine languages, CSVs, methodology and reproduction. These are synthetic,
-warm-cache results; CPU limits and storage affect the comparison.
+See the [comparison method, ranges and raw samples](docs/comparison.md#latency-throughput-and-memory).
+The [earlier Linux performance guide](docs/benchmarks.md) separately covers
+nine languages, stale-header checks and year repairs.
 
 ## Installation
 

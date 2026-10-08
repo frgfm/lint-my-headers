@@ -1,0 +1,165 @@
+{
+  "recorded_utc": "2026-10-06T16:27:54.476716+00:00",
+  "platform": "macOS-15.7.7-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "3.11.13",
+  "logical_cpus": 11,
+  "runs": 7,
+  "warmups": 1,
+  "source_language": "Python",
+  "current_year": 2026,
+  "owner": "Benchmark",
+  "harness_sha256": "135252871c1035987fa5cd845e50069072561f93f66c3874368825b6fa8de761",
+  "bytes_per_file": 1024,
+  "clock": "perf_counter_ns; process launch through completion",
+  "rss": "separate OS time invocations; maximum process RSS, not summed process-tree RSS",
+  "commands": {
+    "lmh": [
+      "lmh",
+      "check",
+      "--config",
+      "$FIXTURE/lmh/.lmh.toml"
+    ],
+    "hawkeye": [
+      "hawkeye",
+      "check",
+      "--config",
+      "$FIXTURE/hawkeye/.licenserc.toml"
+    ],
+    "addlicense": [
+      "addlicense",
+      "-check",
+      "-f",
+      "$FIXTURE/addlicense/HEADER.txt",
+      "src"
+    ],
+    "license-eye": [
+      "license-eye",
+      "--config",
+      "$FIXTURE/license-eye/.licenserc.yaml",
+      "header",
+      "check"
+    ],
+    "nwa": [
+      "nwa",
+      "check",
+      "--tmpltype",
+      "static",
+      "--tmpl",
+      "$FIXTURE/nwa/HEADER.txt",
+      "--no-color",
+      "src/**/*.py"
+    ],
+    "reuse": [
+      "reuse",
+      "lint"
+    ]
+  },
+  "binary_sha256": {
+    "lmh": "5c0dcda154816c954c8a3e96293932c81f4e8abe4c412e9f084c7ef990af98cc",
+    "hawkeye": "2b5c15208432cfbcbf576a6f931ac4af5e03f7f86800d76eb26e89f4a7ec64a9",
+    "addlicense": "094f9b26d931a96df5bdb7c0f1e8c7a15d640b50c9bd282e60b25010aa47f30d",
+    "license-eye": "318c12f2a80dafd0947e7d53be4e6edc3a16e04effa1faf399d97a8040b7f49a",
+    "nwa": "59baf69981529728a1c6ffe45e520fd7aaf4f28443a7202f4f0cc4eabe61d848",
+    "reuse": "797adb8484152b70493ebbe3b895a7979b2b85288fc14cf429233b021e7c6bf3"
+  },
+  "published_harness_sha256": "135252871c1035987fa5cd845e50069072561f93f66c3874368825b6fa8de761",
+  "cpu": "Apple M3 Pro",
+  "memory_bytes": 38654705664,
+  "filesystem": "apfs",
+  "versions": {
+    "lmh": "0.7.0",
+    "hawkeye": "7.2.0",
+    "addlicense": "1.2.0",
+    "license-eye": "0.9.0 (go install; CLI reports dev)",
+    "nwa": "0.8.0",
+    "reuse": "6.2.0",
+    "licenseheaders": "0.8.8"
+  },
+  "installation": {
+    "lmh": "published PyPI macOS arm64 wheel",
+    "hawkeye": "upstream macOS arm64 release binary",
+    "addlicense": "upstream macOS arm64 release binary",
+    "license-eye": "go install github.com/apache/skywalking-eyes/cmd/license-eye@v0.9.0; Go 1.26.1",
+    "nwa": "upstream macOS arm64 release binary",
+    "reuse": "isolated Python 3.11.13 venv; reuse[charset-normalizer]==6.2.0",
+    "licenseheaders": "isolated Python 3.11.13 venv; licenseheaders==0.8.8"
+  },
+  "python_packages": {
+    "lmh": [
+      "lint-my-headers==0.7.0"
+    ],
+    "reuse": [
+      "attrs==26.1.0",
+      "boolean-py==5.0",
+      "charset-normalizer==3.5.2",
+      "click==8.5.0",
+      "jinja2==3.1.6",
+      "license-expression==30.4.4",
+      "markupsafe==3.0.4",
+      "python-debian==1.1.1",
+      "python-magic==0.4.27",
+      "reuse==6.2.0",
+      "tomlkit==0.15.1"
+    ],
+    "licenseheaders": [
+      "licenseheaders==0.8.8",
+      "regex==2026.9.29"
+    ]
+  },
+  "disk_footprint": {
+    "lmh": {
+      "logical_bytes": 6510721,
+      "allocated_bytes": 6578176,
+      "regular_files": 30
+    },
+    "hawkeye": {
+      "logical_bytes": 11404208,
+      "allocated_bytes": 11407360,
+      "regular_files": 1
+    },
+    "addlicense": {
+      "logical_bytes": 3073010,
+      "allocated_bytes": 3076096,
+      "regular_files": 1
+    },
+    "license-eye": {
+      "logical_bytes": 29339394,
+      "allocated_bytes": 29339648,
+      "regular_files": 1
+    },
+    "nwa": {
+      "logical_bytes": 7420162,
+      "allocated_bytes": 7421952,
+      "regular_files": 1
+    },
+    "reuse": {
+      "logical_bytes": 8215175,
+      "allocated_bytes": 9220096,
+      "regular_files": 424
+    },
+    "licenseheaders": {
+      "logical_bytes": 1657706,
+      "allocated_bytes": 1794048,
+      "regular_files": 52
+    }
+  },
+  "disk_method": "Regular installed files only; excludes shared Python interpreter, compilers, package/build caches, and fixture data. Native binary or Python venv, as specified per tool.",
+  "source_urls": {
+    "hawkeye": "https://github.com/fast/hawkeye/tree/v7.2.0",
+    "addlicense": "https://github.com/google/addlicense/tree/v1.2.0",
+    "license-eye": "https://github.com/apache/skywalking-eyes/tree/v0.9.0",
+    "nwa": "https://github.com/B1NARY-GR0UP/nwa/tree/v0.8.0",
+    "reuse": "https://pypi.org/project/reuse/6.2.0/",
+    "licenseheaders": "https://github.com/johann-petrak/licenseheaders/tree/v0.8.8",
+    "lmh": "https://pypi.org/project/lint-my-headers/0.7.0/"
+  },
+  "accepted_headers": {
+    "lmh": "# Copyright (C) 2024-2026, Benchmark.\n\n# This program is licensed under the Apache License 2.0.\n# See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.\n\n",
+    "hawkeye": "# Copyright (C) 2024-2026, Benchmark.\n#\n# This program is licensed under the Apache License 2.0.\n# See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.\n\n",
+    "addlicense": "# Copyright (C) 2024-2026, Benchmark.\n#\n# This program is licensed under the Apache License 2.0.\n# See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.\n\n",
+    "license-eye": "# Copyright (C) 2024-2026, Benchmark.\n#\n# This program is licensed under the Apache License 2.0.\n# See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.\n\n",
+    "nwa": "# Copyright (C) 2024-2026, Benchmark.\n#\n# This program is licensed under the Apache License 2.0.\n# See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.\n\n",
+    "reuse": "# SPDX-FileCopyrightText: 2024-2026 Benchmark\n#\n# SPDX-License-Identifier: Apache-2.0\n\n"
+  }
+}

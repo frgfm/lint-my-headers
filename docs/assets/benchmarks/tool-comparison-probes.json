@@ -1,0 +1,122 @@
+[
+  {
+    "tool": "lmh",
+    "case": "clean",
+    "exit": 0
+  },
+  {
+    "tool": "lmh",
+    "case": "missing",
+    "exit": 1
+  },
+  {
+    "tool": "lmh",
+    "case": "wrong_owner",
+    "exit": 1
+  },
+  {
+    "tool": "lmh",
+    "case": "stale_year",
+    "exit": 1
+  },
+  {
+    "tool": "hawkeye",
+    "case": "clean",
+    "exit": 0
+  },
+  {
+    "tool": "hawkeye",
+    "case": "missing",
+    "exit": 1
+  },
+  {
+    "tool": "hawkeye",
+    "case": "wrong_owner",
+    "exit": 1
+  },
+  {
+    "tool": "hawkeye",
+    "case": "stale_year",
+    "exit": 1
+  },
+  {
+    "tool": "addlicense",
+    "case": "clean",
+    "exit": 0
+  },
+  {
+    "tool": "addlicense",
+    "case": "missing",
+    "exit": 1
+  },
+  {
+    "tool": "addlicense",
+    "case": "wrong_owner",
+    "exit": 0
+  },
+  {
+    "tool": "addlicense",
+    "case": "stale_year",
+    "exit": 0
+  },
+  {
+    "tool": "license-eye",
+    "case": "clean",
+    "exit": 0
+  },
+  {
+    "tool": "license-eye",
+    "case": "missing",
+    "exit": 1
+  },
+  {
+    "tool": "license-eye",
+    "case": "wrong_owner",
+    "exit": 1
+  },
+  {
+    "tool": "license-eye",
+    "case": "stale_year",
+    "exit": 1
+  },
+  {
+    "tool": "nwa",
+    "case": "clean",
+    "exit": 0
+  },
+  {
+    "tool": "nwa",
+    "case": "missing",
+    "exit": 1
+  },
+  {
+    "tool": "nwa",
+    "case": "wrong_owner",
+    "exit": 1
+  },
+  {
+    "tool": "nwa",
+    "case": "stale_year",
+    "exit": 1
+  },
+  {
+    "tool": "reuse",
+    "case": "clean",
+    "exit": 0
+  },
+  {
+    "tool": "reuse",
+    "case": "missing",
+    "exit": 1
+  },
+  {
+    "tool": "reuse",
+    "case": "wrong_owner",
+    "exit": 0
+  },
+  {
+    "tool": "reuse",
+    "case": "stale_year",
+    "exit": 0
+  }
+]
