@@ -138,7 +138,8 @@ Charts and the [archived report and data](https://github.com/user-attachments/fi
 are browser uploads attached to PR #103. Only small CSVs and environment metadata live in Git. The
 [benchmark workflow](https://github.com/frgfm/lint-my-headers/actions/workflows/benchmark.yml)
 renders committed snapshots on same-repository PRs and saves GitHub Actions artifacts.
+Each snapshot includes the committed CSV and JSON evidence with the rendered charts and report.
 Its manual run measures the full suite and saves the same artifact type;
 the optional `release` tag selects the version to benchmark. For durable PR
-attachments, download the artifact and use the PR's browser uploader. Benchmark
+attachments, download the temporary artifact and use the PR's browser uploader. Benchmark
 runs do not create releases or upload release assets.
