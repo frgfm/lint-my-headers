@@ -1,7 +1,7 @@
 name = "lint-my-headers-docs"
 compatibility_date = "2026-09-01"
 workers_dev = false
-preview_urls = false
+preview_urls = true
 
 # A Custom Domain owns the hostname and provisions DNS and TLS.
 # Assets are staged below /lint-my-headers/ by make docs-cloudflare.

@@ -152,9 +152,9 @@ serves assets only below `/lint-my-headers/`. Future projects can use more-speci
 [Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/),
 which take precedence over the
 [Custom Domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
-Coordinate hostname-level settings when adding projects. Wrangler disables
-production `workers.dev` and version URLs. Pull requests use separate Worker
-Previews.
+Coordinate hostname-level settings when adding projects. Wrangler disables the
+production `workers.dev` route. `preview_urls = true` enables version URLs and
+separate Worker Preview URLs.
 
 Enable **Preview Builds** under the Worker's **Settings > Build > Branch control**.
 Use the same build command as production and set the Preview command to
