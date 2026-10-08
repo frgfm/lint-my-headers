@@ -265,6 +265,29 @@ fn missing_header_insertion_keeps_existing_legal_text_and_unsupported_docstrings
         ),
         ("later.py", "value = 1\n# Copyright 2024 Other Owner\n"),
         ("symbol.py", "# © 2024 Other Owner\nvalue = 1\n"),
+        ("license_variable.py", "license = 'example'\n"),
+        ("attribution.py", "# (c) 2024 Other Owner\nvalue = 1\n"),
+        ("rights.py", "# All rights reserved.\nvalue = 1\n"),
+        (
+            "bytes.py",
+            "b\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+        ),
+        (
+            "formatted.py",
+            "f\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+        ),
+        (
+            "joined_formatted.py",
+            "\"Copy\" f\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+        ),
+        (
+            "joined_bytes.py",
+            "b\"Copy\" b\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+        ),
+        (
+            "interpolated.py",
+            "f\"{'Copy'}right 2024 Other Owner\"\nvalue = 1\n",
+        ),
         (
             "attribute.rs",
             "#![no_std]\n// Copyright 2024 Other Owner\n",
@@ -286,6 +309,12 @@ fn missing_header_insertion_keeps_existing_legal_text_and_unsupported_docstrings
             .iter()
             .all(|d| { d["code"] == "LMH001" && d["fixable"] == false })
     );
+    assert!(fixed["diagnostics"].as_array().unwrap().iter().all(|d| {
+        d["message"]
+            .as_str()
+            .unwrap()
+            .contains("manual review required")
+    }));
     for (name, body) in originals {
         assert_eq!(
             fs::read_to_string(root.join("src").join(name)).unwrap(),
@@ -433,6 +462,18 @@ fn common_header_layouts_use_the_same_read_only_checks_and_guarded_year_repairs(
                 "src/mixed.py",
                 format!(
                     "# SPDX-FileCopyrightText: {years} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n\n# This program is licensed under the MIT License.\nvalue = 1\n"
+                ),
+            ),
+            (
+                "src/mixed_file_notice.py",
+                format!(
+                    "# SPDX-FileCopyrightText: {years} {OWNER}\n# SPDX-License-Identifier: Apache-2.0\n\n# This file is licensed under the MIT License.\nvalue = 1\n"
+                ),
+            ),
+            (
+                "src/mixed_short_notice.c",
+                format!(
+                    "/*\nSPDX-FileCopyrightText: {years} {OWNER}\nSPDX-License-Identifier: Apache-2.0\n*/\n\n// License: MIT\nint value = 1;\n"
                 ),
             ),
             (

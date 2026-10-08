@@ -389,12 +389,17 @@ fn is_copyright(text: &str) -> bool {
 }
 
 fn prose_license_count(text: &str) -> usize {
-    // ponytail: count the supported prose prefixes; add explicit formats when more notices need SPDX mixing.
+    // Count licensing text outside structured fields, then allow only the configured notice.
     text.lines()
         .filter(|line| {
             let text = line.trim_start_matches([' ', '\t', '#', '/', '*', '!']);
-            text.starts_with("This program is licensed under ")
-                || text.starts_with("Licensed under ")
+            !is_copyright(text)
+                && !text.starts_with("SPDX-License-Identifier:")
+                && (text
+                    // Mentions of a field name inside ordinary text are not declarations.
+                    .split("SPDX-License-Identifier:")
+                    .any(mentions_licensing)
+                    || mentions_leading_attribution(text))
         })
         .count()
 }
@@ -525,9 +530,28 @@ fn block_header(comment: &str) -> Option<Vec<String>> {
 
 fn mentions_licensing(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
-    ["copyright", "©", "spdx", "license", "licence"]
-        .iter()
-        .any(|word| text.contains(word))
+    [
+        "copyright",
+        "©",
+        "spdx",
+        "license",
+        "licence",
+        "all rights reserved",
+    ]
+    .iter()
+    .any(|word| text.contains(word))
+}
+
+fn mentions_leading_attribution(text: &str) -> bool {
+    let text = text.trim_start_matches([' ', '\t', '#', '/', '*', '!']);
+    text.strip_prefix("(c)")
+        .or_else(|| text.strip_prefix("(C)"))
+        .is_some_and(|tail| {
+            tail.trim_start()
+                .as_bytes()
+                .get(..4)
+                .is_some_and(|year| year.iter().all(u8::is_ascii_digit))
+        })
 }
 
 fn licensing_docstring(source: &str) -> bool {
@@ -536,11 +560,17 @@ fn licensing_docstring(source: &str) -> bool {
     if source.starts_with('(') {
         return true;
     }
-    let source = source.strip_prefix(['r', 'R', 'u', 'U']).unwrap_or(source);
+    let literal = source.trim_start_matches(['b', 'B', 'f', 'F', 'r', 'R', 'u', 'U', 't', 'T']);
+    let unsupported_prefix =
+        source[..source.len() - literal.len()].contains(['b', 'B', 'f', 'F', 't', 'T']);
+    let source = literal;
     let bytes = source.as_bytes();
     let Some(&quote) = bytes.first().filter(|&&byte| matches!(byte, b'\'' | b'"')) else {
         return false;
     };
+    if unsupported_prefix {
+        return true;
+    }
     let width = if bytes.starts_with(&[quote; 3]) { 3 } else { 1 };
     let delimiter = [quote; 3];
     let mut index = width;
@@ -549,7 +579,7 @@ fn licensing_docstring(source: &str) -> bool {
             return true;
         } else if bytes[index..].starts_with(&delimiter[..width]) {
             let tail = source[index + width..].trim_start();
-            let tail = tail.strip_prefix(['r', 'R', 'u', 'U']).unwrap_or(tail);
+            let tail = tail.trim_start_matches(['b', 'B', 'f', 'F', 'r', 'R', 'u', 'U', 't', 'T']);
             return mentions_licensing(&source[width..index])
                 || tail.starts_with(['\'', '"', '\\']);
         } else {
@@ -659,8 +689,9 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         prose_licenses,
     } = leading_comments(&source, language);
     // ponytail: a whole-file keyword guard can reject examples and variable names; use a parser only if these refusals become a problem.
-    let licensing_text =
-        policy.creation_year.is_some() && comments.is_empty() && mentions_licensing(&source);
+    let licensing_text = policy.creation_year.is_some()
+        && comments.is_empty()
+        && (mentions_licensing(&source) || source[..end].lines().any(mentions_leading_attribution));
     let licensing_literal = policy.creation_year.is_some()
         && comments.is_empty()
         && language == Language::Python
@@ -718,6 +749,20 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
                     .expect("missing-header diagnostic")
                     .fixable = true;
             }
+        }
+        if policy.creation_year.is_some() && result.edit.is_none() {
+            let reason = if licensing_text {
+                "file contains licensing text"
+            } else if licensing_literal {
+                "opening Python expression needs review"
+            } else {
+                "header cannot be inserted safely"
+            };
+            result
+                .diagnostic
+                .as_mut()
+                .expect("missing-header diagnostic")
+                .message = format!("missing legal header; {reason}; manual review required");
         }
         return result;
     }
@@ -1060,6 +1105,9 @@ mod tests {
         for (path, raw) in [
             ("file.py", "# copyright 2024 Other Owner\nvalue = 1\n"),
             ("file.py", "# © 2024 Other Owner\nvalue = 1\n"),
+            ("file.py", "# (c) 2024 Other Owner\nvalue = 1\n"),
+            ("file.c", "/* (C) 2024 Other Owner */\nint value = 1;\n"),
+            ("file.py", "# All rights reserved.\nvalue = 1\n"),
             ("file.py", "# SPDX-License-Identifier: MIT\nvalue = 1\n"),
             ("file.py", "value = 1\n# Copyright 2024 Other Owner\n"),
             (
@@ -1081,6 +1129,26 @@ mod tests {
                 "\"Copy\" \"right 2024 Other Owner\"\nvalue = 1\n",
             ),
             ("file.py", "\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n"),
+            (
+                "file.py",
+                "b\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            ),
+            (
+                "file.py",
+                "f\"Copy\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            ),
+            (
+                "file.py",
+                "\"Copy\" f\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            ),
+            (
+                "file.py",
+                "b\"Copy\" b\"\\x72ight 2024 Other Owner\"\nvalue = 1\n",
+            ),
+            (
+                "file.py",
+                "f\"{'Copy'}right 2024 Other Owner\"\nvalue = 1\n",
+            ),
             (
                 "file.py",
                 "\"Copy\" \\\n\"right 2024 Other Owner\"\nvalue = 1\n",
@@ -1107,6 +1175,15 @@ mod tests {
             analyze(ordinary, &insertion, "file.py")
                 .replacement
                 .is_some()
+        );
+        assert!(
+            analyze(
+                b"int f(int c) { if (c) return 2024; return 0; }\n",
+                &insertion,
+                "file.c"
+            )
+            .replacement
+            .is_some()
         );
         insertion.owner.push('\0');
         assert!(
@@ -1320,6 +1397,24 @@ mod tests {
                 ),
                 (
                     format!(
+                        "{header}\n{} This file is licensed under the MIT License.\n",
+                        language.comment()
+                    ),
+                    "LMH006",
+                ),
+                (
+                    format!("{header}\n{} License: MIT\n", language.comment()),
+                    "LMH006",
+                ),
+                (
+                    format!(
+                        "{header}\n{} Released under the MIT licence.\n",
+                        language.comment()
+                    ),
+                    "LMH006",
+                ),
+                (
+                    format!(
                         "{header}{} SPDX-License-Identifier: Apache-2.0\n",
                         language.comment()
                     ),
@@ -1370,6 +1465,8 @@ mod tests {
                     "/*\nCopyright 2024 Example Owner\n\nLicense notice.\n*/\n// SPDX-License-Identifier: MIT\n".to_string(),
                     format!("/*\n{text}"),
                     format!("{header}\n/* This program is licensed under the MIT License. */\n"),
+                    format!("/*\n{text}*/\n\n// License: MIT\n"),
+                    format!("/*\n{text}*/\n\n// This file is licensed under the MIT License.\n"),
                     format!("/*\n{text}*/\n// Licensed under the MIT License.\n"),
                     "/*\nCopyright 2024 Example Owner\n\nLicense notice.\nLicensed under the MIT License.\n*/\n".to_string(),
                     "/*\nCopyright 2024 Example Owner\n\nLicense notice.\n*/ /* Licensed under the MIT License. */\n".to_string(),

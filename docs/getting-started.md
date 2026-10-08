@@ -133,16 +133,20 @@ git diff
 The new header uses 2024 through the current year. Declare the actual year for
 the selected files; `creation-year = 2024` in project configuration has the same
 effect. Without this declaration, `fix` keeps `LMH001` unresolved.
+Select files with the same actual creation year and run separately for different years.
 
 Insertion keeps the original bytes, encoding, line endings, preambles, and mode.
 Existing legal declarations, ambiguous layouts, and notices that cannot be
 encoded in the file remain unfixable. Python files that start with parentheses,
-or with joined or escaped strings, also require review. Existing headers still
-use the limited end-year repair. This feature is not in published 0.7.0.
+joined or escaped strings, or byte, formatted, or template strings also require
+review. Existing headers still use the limited end-year repair. This feature is
+not in published 0.7.0.
 
-Insertion refuses any file that contains `copyright`, `©`, `SPDX`, `license`, or
-`licence`, regardless of case or position. Examples and variable names can also
-trigger this guard; review those files and add the header manually.
+Insertion refuses any file that contains `copyright`, `©`, `SPDX`, `license`,
+`licence`, or `all rights reserved`, regardless of case or position. A leading
+comment such as `(c) 2024 Other Owner` also needs review. Examples and variable
+names can trigger these guards; `LMH001` explains the refusal. Review those files
+and add the header manually.
 
 | Exit code | Meaning |
 | --- | --- |

@@ -157,8 +157,9 @@ unresolved. Existing legal text and unsafe targets require review. Insertion
 keeps source bytes, encoding, preambles, line endings, and file mode. Published
 0.7.0 does not include this feature.
 
-Insertion refuses files containing `copyright`, `©`, `SPDX`, `license`, or `licence`
-anywhere, including examples and variable names. Review those files manually.
+Insertion refuses files containing `copyright`, `©`, `SPDX`, `license`, `licence`,
+or `all rights reserved` anywhere, including examples and variable names. Leading
+`(c)` year attributions also require review. `LMH001` explains blocked insertion.
 
 Keep the policy in the file your project already uses:
 

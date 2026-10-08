@@ -59,6 +59,9 @@ SwiftPM/Xcode projects, and shell or C/C++ projects can use `.lmh.toml`;
 | `ignore-files` / `--ignore-files` | Exact excluded basenames; default `["__init__.py"]`. |
 | `ignore-folders` / `--ignore-folders` | Excluded subtrees; default `[".github"]`. |
 
+Select files with the same actual creation year when inserting headers. Run
+separately for each year; one shared `creation-year` does not describe mixed-age files.
+
 Configuration lists are arrays. CLI language and ignore lists are comma-separated
 and replace the corresponding configured list:
 
