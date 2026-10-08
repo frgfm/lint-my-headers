@@ -135,11 +135,11 @@ prefix the benchmark command with `taskset -c CPU` using one allowed CPU to
 compare both tools on one CPU. `--help` lists all options.
 
 Charts and the [archived report and data](https://github.com/user-attachments/files/33177377/benchmark-5152bf26fb17.zip)
-are browser uploads attached to PR #103. Only small CSVs and environment metadata live in Git. The
+are browser uploads on [PR #103](https://github.com/frgfm/lint-my-headers/pull/103).
+Only small CSVs and environment metadata live in Git. The
 [benchmark workflow](https://github.com/frgfm/lint-my-headers/actions/workflows/benchmark.yml)
-renders committed snapshots on same-repository PRs and saves GitHub Actions artifacts.
-Each snapshot includes the committed CSV and JSON evidence with the rendered charts and report.
-Its manual run measures the full suite and saves the same artifact type;
-the optional `release` tag selects the version to benchmark. For durable PR
-attachments, download the temporary artifact and use the PR's browser uploader. Benchmark
-runs do not create releases or upload release assets.
+saves GitHub Actions artifacts. PR runs render committed data and include every CSV
+and JSON evidence file. Manual runs measure the full suite; the optional `release`
+tag selects an existing version. Actions artifacts expire. To keep results, download
+the artifact and upload it through the PR's browser uploader. Benchmark runs do not
+create releases or upload release assets.
