@@ -1,7 +1,7 @@
 - id: lmh-wheel
   name: lmh (native wheel)
   description: Check configured source headers with the released native wheel; requires uv, with no Rust build.
-  entry: uv tool run --isolated --no-config --no-build --python ">=3.11" --from lint-my-headers==0.7.0 lmh check
+  entry: uv tool run --isolated --no-config --no-build --python ">=3.11" --from lint-my-headers==0.8.0 lmh check
   language: system
   types: [file]
   files: '\.(py|js|jsx|mjs|cjs|ts|tsx|mts|cts|rs|go|swift|sh|bash|c|h|cc|cpp|cxx|c\+\+|C|hh|hpp|hxx|h\+\+|H|ipp|tpp|inl)$'

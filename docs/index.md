@@ -17,13 +17,14 @@ findings, and update eligible stale years.
   and C++.
 - **Read-only checks:** `lmh check` reports what needs attention without writing
   source files.
-- **Year-only repairs:** `lmh fix` updates one recognized stale year for your
-  configured owner.
+- **Limited repairs:** `lmh fix` updates one recognized stale year for your
+  configured owner, or inserts a missing header with a declared creation year.
 
-!!! info "Multilingual release"
+!!! info "Version 0.8.0"
 
-    Version 0.7.0 provides all nine languages through native PyPI wheels. Select
-    `languages` in your policy; the default is Python. See the
+    Missing-header insertion, additional header layouts, and the wheel hook join
+    all nine supported languages. Select `languages` in your policy; the default
+    is Python. See the
     [installation options](getting-started.md#install).
 
 ## One year, one small diff
@@ -70,9 +71,8 @@ Missing headers without a creation year, wrong owners, malformed notices, and
 future years require manual review.
 
 Ownership and licensing always come from your declared policy. Lint My Headers
-does not establish legal, SPDX, or REUSE compliance. Published 0.7.0 does not
-insert missing headers. The unreleased source can
-[insert a missing header with a declared creation year](getting-started.md#insert-a-missing-header-unreleased).
+does not establish legal, SPDX, or REUSE compliance. Version 0.8.0 can
+[insert a missing header with a declared creation year](getting-started.md#insert-a-missing-header).
 Both `lmh` and `lint-my-headers` expose the same commands, with no language
 toolchain or Node.js runtime needed by the installed native CLI.
 

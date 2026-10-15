@@ -1,3 +1,69 @@
+# Lint My Headers v0.8.0
+
+Version 0.8.0 adds missing-header insertion with a declared creation year,
+broader header recognition, and a wheel-only repository hook for pre-commit
+and prek. Recognized stale-year repairs continue to change only the end year.
+
+## Install and upgrade
+
+```shell
+uv tool install --force lint-my-headers==0.8.0
+```
+
+Or use `python -m pip install --upgrade lint-my-headers==0.8.0`.
+PyPI installation requires Python 3.11+. Native wheels include both CLI names;
+source builds require Rust 1.93 and a C compiler.
+
+## Changes since 0.7.0
+
+- Insert a missing header only when the configured owner and notice are explicit
+  and `--creation-year` or `creation-year` declares the selected files' actual
+  first copyright year. `starting-year` remains a validation floor. Without a
+  creation year, missing headers remain unresolved.
+- Recognize common prose copyright forms, ordinary block headers, and
+  single-owner SPDX copyright/license pairs. Existing-header repairs preserve
+  every byte except the eligible end year.
+- Add the `lmh-wheel` repository hook, pinned to the release's native PyPI wheel.
+  It requires uv and disables source builds. The `lmh` source hook remains available.
+- Publish feature and runtime comparisons with six alternative header tools,
+  including raw samples and reproduction commands. Performance and installed-size
+  measurements remain labeled as the recorded 0.7.0 snapshot; they have not been
+  rerun for 0.8.0.
+- Keep benchmark reports out of package distributions and retain byte-preserving
+  repair, link, ambiguity, encoding, and concurrent-change guards.
+
+## Migration and integration
+
+Existing policies continue to work. Missing-header insertion is opt-in:
+
+```shell
+lmh check --creation-year 2024 src/new_file.py
+lmh fix --creation-year 2024 src/new_file.py
+lmh check src/new_file.py
+git diff
+```
+
+Use the actual declared creation year for the selected files, with separate runs
+for different years. Existing legal markers, unsafe targets, and ambiguous
+content require manual review. LMH never infers owners, licenses, or years and
+does not establish legal or REUSE compliance.
+
+For pre-commit or prek, install uv and select the wheel hook:
+
+```yaml
+repos:
+  - repo: https://github.com/frgfm/lint-my-headers
+    rev: v0.8.0
+    hooks:
+      - id: lmh-wheel
+```
+
+For the GitHub Action, use `frgfm/lint-my-headers@v0.8.0`. Prefer the immutable
+release commit SHA for production integrations. Both CLI names, exit codes,
+JSON schema version 1, diagnostic codes, and Action inputs/outputs are preserved.
+
+---
+
 # Lint My Headers v0.7.0
 
 Version 0.7.0 brings the multilingual CLI to the published native PyPI wheels.

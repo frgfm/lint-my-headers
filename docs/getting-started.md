@@ -15,13 +15,13 @@ Install the published multilingual release or build the CLI from source.
     With [uv](https://docs.astral.sh/uv/), install the native wheel:
 
     ```shell
-    uv tool install lint-my-headers==0.7.0
+    uv tool install lint-my-headers==0.8.0
     lmh --version
     ```
 
     PyPI tooling requires Python 3.11+. Wheels contain native `lmh` and
     `lint-my-headers` executables. Building a source distribution also requires
-    Rust and a C compiler. Version 0.7.0 supports all nine languages and every
+    Rust and a C compiler. Version 0.8.0 supports all nine languages and every
     [configuration container](configuration.md#configuration-files).
 
 === "Source checkout"
@@ -97,10 +97,9 @@ Checks are read-only. A valid Python header in 2026 looks like this:
 
 Bash uses the same `#` marker. Other supported languages use `//`, with the same
 text and blank lines. See [header layouts](configuration.md#header-layouts) for
-language-specific details. Published 0.7.0 leaves missing headers for manual review.
-The [additional layouts](configuration.md#additional-layouts-unreleased) support
-common copyright lines, ordinary blocks, and SPDX pairs in the unreleased source
-checkout; they are not available in published 0.7.0.
+language-specific details. The [additional layouts](configuration.md#additional-layouts)
+support common copyright lines, ordinary blocks, and single-owner SPDX pairs.
+Missing-header insertion requires an explicitly declared creation year.
 
 ## Refresh a stale year
 
@@ -117,9 +116,9 @@ In 2026, a creation year of `2024` with an end year of `2025` becomes
 `2024-2026`. The tool retains the creation year and every other byte. It leaves
 ineligible findings for manual review.
 
-## Insert a missing header (unreleased)
+## Insert a missing header
 
-The source checkout can insert a header when the policy supplies its owner and
+Version 0.8.0 can insert a header when the policy supplies its owner and
 notice and you declare the file's first copyright year. The existing
 `starting-year` is a validation floor; it is not used as the file's year.
 
@@ -139,8 +138,7 @@ Insertion keeps the original bytes, encoding, line endings, preambles, and mode.
 Existing legal declarations, ambiguous layouts, and notices that cannot be
 encoded in the file remain unfixable. Python files that start with parentheses,
 joined or escaped strings, or byte, formatted, or template strings also require
-review. Existing headers still use the limited end-year repair. This feature is
-not in published 0.7.0.
+review. Existing headers still use the limited end-year repair.
 
 Insertion refuses any file that contains `copyright`, `©`, `SPDX`, `license`,
 `licence`, or `all rights reserved`, regardless of case or position. A leading

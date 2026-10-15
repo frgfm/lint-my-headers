@@ -51,7 +51,7 @@ SwiftPM/Xcode projects, and shell or C/C++ projects can use `.lmh.toml`;
 | --- | --- |
 | `owner` / `--owner` | Required exact, single-line copyright owner. |
 | `starting-year` / `--starting-year` | Required earliest accepted file creation year. |
-| `creation-year` / `--creation-year` | Unreleased source only. Optional declared first year for inserting missing headers; default unset. Applies to all selected missing headers, not existing ones. |
+| `creation-year` / `--creation-year` | Optional declared first year for inserting missing headers; default unset. Applies to all selected missing headers, not existing ones. |
 | `license` / `--license` | SPDX identifier selecting a prose notice; requires a local `LICENSE`. |
 | `license-notice` / `--license-notice` | Custom notice file; configure exactly one license source. |
 | `paths` / positional paths | Selected files or directories; default `.`. |
@@ -104,10 +104,10 @@ markers. Blank notices fail with exit 2 before source files are checked or repai
 Notice lines must match in full, including the final line when the notice file has
 no trailing newline.
 
-### Additional layouts (unreleased)
+### Additional layouts
 
-These layouts require the source checkout. Published **0.7.0** uses the prose
-layout above. Existing-header repairs still change only the end year.
+Version **0.8.0** supports these layouts in addition to the prose layout above.
+Existing-header repairs still change only the end year.
 
 | Layout | Rules |
 | --- | --- |
@@ -169,8 +169,7 @@ Validation stops at the first code line after allowed preambles and leading
 comments/blank lines. Later copyright notices and body syntax errors are ignored;
 the entire file must still decode successfully. Duplicate notices and
 copyright-bearing documentation comments in the leading region refuse repair.
-Published 0.7.0 also refuses copyright-bearing ordinary blocks; the unreleased
-layouts above support unambiguous ordinary blocks.
+The layouts above support unambiguous ordinary blocks.
 Directory discovery skips symlinks and reparse points. Explicit linked
 files may be checked, but repairs refuse linked files/parents, multiple hard
 links, and concurrently changed targets.

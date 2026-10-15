@@ -10,14 +10,13 @@ A presence check, a fixed header policy, and a REUSE audit answer different ques
 ## Features that change the choice
 
 Competitor capabilities were reviewed on **6 October 2026**. LMH capabilities
-include the changes merged into `main` as of **15 October 2026**, planned for
-0.8.0. The published release is still 0.7.0. Tool names link to upstream
-documentation; behavior tests and performance measurements below use 0.7.0.
+describe **0.8.0**, reviewed on **15 October 2026**. Tool names link to upstream
+documentation. The recorded behavior tests, timings, and installed sizes below
+use **0.7.0** and have not been rerun for 0.8.0.
 
 | Tool | Read-only check | Insert missing headers | Change existing headers | Remove headers |
 | --- | --- | --- | --- | --- |
-| **[LMH main / next 0.8.0](configuration.md)** | Declared owner, years, and notice. | Yes, with an explicitly declared creation year, owner, and notice. | Refresh one eligible end year. | No. |
-| **[LMH 0.7.0](configuration.md)** | Declared owner, years, and notice. | No. Reports missing headers. | Refresh one eligible end year. | No. |
+| **[LMH 0.8.0](configuration.md)** | Declared owner, years, and notice. | Yes, with an explicitly declared creation year, owner, and notice. | Refresh one eligible end year. | No. |
 | **[HawkEye 7.2.0](https://github.com/fast/hawkeye/tree/v7.2.0)** | Match a configured template. | Yes. | Replace a recognized header with the template. | Yes, recognized headers. |
 | **[addlicense 1.2.0](https://github.com/google/addlicense/tree/v1.2.0)** | Check header presence. | Yes. | Leaves recognized existing headers in place. | No. |
 | **[License Eye 0.9.0](https://github.com/apache/skywalking-eyes/tree/v0.9.0)** | Match header text or patterns. Also has dependency license checks. | Yes. | Can rewrite recognized headers with an existing-header pattern and new content. | No dedicated command. |
@@ -33,7 +32,7 @@ A template replacement can change more text. Use it when that is the job you nee
 
 | Tool | Configuration | JSON check output | SPDX support | Other useful features |
 | --- | --- | --- | --- | --- |
-| LMH | TOML or existing Python/Cargo/JavaScript manifests. | Yes; versioned diagnostics. | `main` supports single-owner SPDX copyright/license pairs; 0.7.0 supports custom notice text only. | First-party pre-commit/prek hook and GitHub Action. Explicit exclusions; no Git ignore rules. |
+| LMH | TOML or existing Python/Cargo/JavaScript manifests. | Yes; versioned diagnostics. | Single-owner SPDX copyright/license pairs; compound expressions and multiple holders are unsupported. | First-party pre-commit/prek hook and GitHub Action. Explicit exclusions; no Git ignore rules. |
 | HawkEye | TOML, templates and styles. | Yes. | Can match SPDX text in a template. | Git ignore rules, optional Git history values, pre-commit hooks. |
 | addlicense | CLI flags, custom header file, ignore patterns. | No dedicated JSON checker output. | Can emit SPDX license identifiers. | First-party pre-commit hook; small native binary. |
 | License Eye | YAML, header text/patterns, comment styles. | No dedicated JSON header-check output. | SPDX license templates and dependency identification. | Git ignore rules, header diffs, dependency summaries, GitHub Actions. |
@@ -221,15 +220,15 @@ No benchmark or plotting package is required.
 
 Choose LMH when you need a declared owner/year/notice policy, structured
 diagnostics, and limited repairs. Existing headers receive only an eligible
-end-year update. On `main`, `fix` can also insert missing headers when the owner,
+end-year update. In 0.8.0, `fix` can also insert missing headers when the owner,
 notice, and actual creation year are explicitly declared. Without a creation
 year, missing headers remain unresolved.
 
 [PR #113](https://github.com/frgfm/lint-my-headers/pull/113) is merged. It adds
 missing-header insertion, common copyright lines, ordinary block headers, and
-single-owner SPDX copyright/license pairs. These features are planned for 0.8.0;
-the recorded timings, behavior probes, and installed sizes above remain evidence
-for published **0.7.0**. They have not been rerun for the new implementation.
+single-owner SPDX copyright/license pairs in **0.8.0**. The recorded timings,
+behavior probes, and installed sizes above remain evidence for **0.7.0**.
+They have not been rerun for the new implementation.
 
 Choose a template tool when you need to rewrite or remove existing headers.
 Choose REUSE when the per-file declaration convention is your requirement.

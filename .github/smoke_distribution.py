@@ -136,6 +136,41 @@ ignore-folders = []
             if source.read_bytes() != repaired:
                 fail("Installed fix changed unexpected bytes")
 
+        missing = root / "src/new.py"
+        body = b"value = 2\n"
+        missing.write_bytes(body)
+        command = [require_command("lmh"), "fix", "--output-format", "json"]
+        result = run([*command, "src/new.py"], root)
+        if result.returncode != 1 or json.loads(result.stdout)["diagnostics"][0]["fixable"]:
+            fail("Installed fix must require a declared creation year for insertion")
+        if missing.read_bytes() != body:
+            fail("Installed fix inserted a header without a declared creation year")
+        result = run([*command, "--creation-year", str(year - 2), "src/new.py"], root)
+        if result.returncode != 0 or json.loads(result.stdout)["changed"] != ["src/new.py"]:
+            fail(f"Installed insertion failed: {result.stdout}{result.stderr}")
+        header = (
+            f"# Copyright (C) {year - 2}-{year}, Example Owner.\n\n"
+            "# This program is licensed under the Apache License 2.0.\n"
+            "# See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.\n\n"
+        ).encode()
+        if missing.read_bytes() != header + body:
+            fail("Installed insertion changed unexpected bytes")
+
+        block = root / "src/spdx.c"
+        original = (
+            f"/*\n * SPDX-FileCopyrightText: {year - 2} Example Owner\n"
+            " * SPDX-License-Identifier: Apache-2.0\n */\n\nint value = 1;\n"
+        ).encode()
+        block.write_bytes(original)
+        result = run([*command, "src/spdx.c"], root)
+        if result.returncode != 0 or json.loads(result.stdout)["changed"] != ["src/spdx.c"]:
+            fail(f"Installed SPDX block repair failed: {result.stdout}{result.stderr}")
+        if block.read_bytes() != original.replace(str(year - 2).encode(), f"{year - 2}-{year}".encode(), 1):
+            fail("Installed SPDX block repair changed unexpected bytes")
+        result = run([require_command("lmh"), "check", "--output-format", "json"], root)
+        if result.returncode != 0 or json.loads(result.stdout)["checked"] != checked + 2:
+            fail(f"Installed post-repair check failed: {result.stdout}{result.stderr}")
+
     sys.stdout.write(f"Distribution smoke passed for {PACKAGE} {expected}.\n")
     return 0
 

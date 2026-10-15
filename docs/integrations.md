@@ -16,14 +16,12 @@ repository hook to run the exact released native wheel:
 ```yaml
 repos:
   - repo: https://github.com/frgfm/lint-my-headers
-    rev: <reviewed-commit-with-lmh-wheel>
+    rev: v0.8.0
     hooks:
       - id: lmh-wheel
 ```
 
-The `lmh-wheel` hook is available on `main` and will ship in the next release.
-Replace the placeholder with a reviewed commit that contains it. The `v0.7.0`
-tag has only the source hook.
+The `lmh-wheel` hook is included in 0.8.0.
 
 Configure `languages` in your policy; the default is Python. uv manages Python
 3.11+ and caches the wheel environment for later runs. It ignores installed uv
@@ -32,7 +30,7 @@ wheel fails; choose the source hook below if you need a Rust build.
 
 ### Released wheel recipe without uv
 
-For the published 0.7.0 native wheel, use an isolated Python 3.11+ hook.
+For the published 0.8.0 native wheel, use an isolated Python 3.11+ hook.
 Configure `languages` in any supported policy file for multilingual checks;
 the default is Python. `--only-binary` prevents an unexpected Rust build.
 
@@ -47,7 +45,7 @@ repos:
         types: [file]
         additional_dependencies:
           - --only-binary=lint-my-headers
-          - lint-my-headers==0.7.0
+          - lint-my-headers==0.8.0
 ```
 
 ### Source hook
@@ -58,7 +56,7 @@ first installation using the pinned toolchain:
 ```yaml
 repos:
   - repo: https://github.com/frgfm/lint-my-headers
-    rev: v0.7.0
+    rev: v0.8.0
     hooks:
       - id: lmh
 ```
@@ -93,11 +91,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: frgfm/lint-my-headers@v0.7.0
+      - uses: frgfm/lint-my-headers@v0.8.0
 ```
 
 Prefer immutable release SHAs for production workflows. The
-[v0.7.0 release notes](https://github.com/frgfm/lint-my-headers/releases/tag/v0.7.0)
+[v0.8.0 release notes](https://github.com/frgfm/lint-my-headers/releases/tag/v0.8.0)
 provide its commit SHA. The default installer uses uv and the exact PyPI version
 declared by the Action ref, with source builds disabled. Unavailable wheels,
 missing releases, and floating versions fail.

@@ -25,7 +25,7 @@ Paths use `/`, including `..` for explicitly selected external files.
 
 | Code | Meaning | Next step |
 | --- | --- | --- |
-| `LMH001` | Missing header. | Published 0.7.0 requires manual insertion. The unreleased source can use `fix` when a creation year is declared and `fixable` is true. |
+| `LMH001` | Missing header. | Use `fix` when a creation year is declared and `fixable` is true; otherwise insert manually. |
 | `LMH002` | Owner mismatch. | Verify the declared ownership manually. |
 | `LMH003` | Invalid, reversed, future, or out-of-policy year. | Review the year policy and source. |
 | `LMH004` | Recognized stale year. | Use `fix` only when `fixable` is true and writes are authorized. |
@@ -52,7 +52,7 @@ and `fix`:
 ```json
 {
   "schema_version": 1,
-  "tool_version": "0.7.0",
+  "tool_version": "0.8.0",
   "command": "check",
   "config_path": "pyproject.toml",
   "checked": 1,
