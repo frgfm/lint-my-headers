@@ -29,8 +29,9 @@ source builds require Rust 1.93 and a C compiler.
   including raw samples and reproduction commands. Performance and installed-size
   measurements remain labeled as the recorded 0.7.0 snapshot; they have not been
   rerun for 0.8.0.
-- Keep benchmark reports out of package distributions and retain byte-preserving
-  repair, link, ambiguity, encoding, and concurrent-change guards.
+- Keep generated benchmark charts and reports in workflow artifacts and PR
+  attachments instead of GitHub release assets. Existing byte-preserving repair,
+  link, ambiguity, encoding, and concurrent-change guards remain in place.
 
 ## Migration and integration
 

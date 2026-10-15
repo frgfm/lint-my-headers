@@ -585,6 +585,9 @@ fn licensing_docstring(source: &str) -> bool {
             let tail = source[index + width..].trim_start();
             let tail = tail.trim_start_matches(['b', 'B', 'f', 'F', 'r', 'R', 'u', 'U', 't', 'T']);
             return mentions_licensing(&source[width..index])
+                || source[width..index]
+                    .split(['\r', '\n'])
+                    .any(mentions_leading_attribution)
                 || tail.starts_with(['\'', '"', '\\']);
         } else {
             index += 1;
@@ -1112,6 +1115,11 @@ mod tests {
             "f\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
             "b\"\"\"Copyright 2024 Other Owner\"\"\"\nvalue = 1\n",
             "\"\"\"Copyright 2024 Other Owner.\"\"\"\nvalue = 1\n",
+            "\"\"\"(C) 2024 Other Owner\"\"\"\nvalue = 1\n",
+            "\"\"\"A module.\n    (c) 2024 Other Owner\n\"\"\"\nvalue = 1\n",
+            "\"\"\"A module.\r(c) 2024 Other Owner\r\"\"\"\rvalue = 1\r",
+            "r'''(c) 2024 Other Owner'''\nvalue = 1\n",
+            "'(C) 2024 Other Owner'\nvalue = 1\n",
             "r'''Existing licence text.'''\nvalue = 1\n",
             "(\"Copyright 2024 Other Owner\")\nvalue = 1\n",
             "\"Copy\" \"right 2024 Other Owner\"\nvalue = 1\n",

@@ -141,10 +141,10 @@ joined or escaped strings, or byte, formatted, or template strings also require
 review. Existing headers still use the limited end-year repair.
 
 Insertion refuses any file that contains `copyright`, `©`, `SPDX`, `license`,
-`licence`, or `all rights reserved`, regardless of case or position. A leading
-comment such as `(c) 2024 Other Owner` also needs review. Examples and variable
-names can trigger these guards; `LMH001` explains the refusal. Review those files
-and add the header manually.
+`licence`, or `all rights reserved`, regardless of case or position. An attribution
+such as `(c) 2024 Other Owner` in a leading comment or Python module docstring
+also needs review. Examples and variable names can trigger these guards;
+`LMH001` explains the refusal. Review those files and add the header manually.
 
 | Exit code | Meaning |
 | --- | --- |
