@@ -446,7 +446,8 @@ For a failed scheduled run, fix the cause and use **Actions → Re-run failed jo
 Lint My Headers is open source under [Apache-2.0](LICENSE). Contributions, bug reports,
 and feedback are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for local development
 and checks, [AGENTS.md](AGENTS.md) for runtime contracts, and
-[RELEASE_NOTES.md](RELEASE_NOTES.md) for release and migration notes.
+[GitHub Releases](https://github.com/frgfm/lint-my-headers/releases) for release
+and migration notes.
 
 [Report a bug](https://github.com/frgfm/lint-my-headers/issues) ·
 [Read the docs](https://docs.fgfm.dev/lint-my-headers/) ·

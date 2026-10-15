@@ -182,4 +182,23 @@ npx --yes wrangler@4.147.0 dev --local
 PR artifacts are review downloads. Preparing this configuration does not create
 Cloudflare resources or publish the production site.
 
-Report reproducible problems through [issues](https://github.com/frgfm/lint-my-headers/issues). Pull requests should describe changed behavior, checks run, and unverified platform/release gates. Publication and repository mutations follow the owner-controlled checklist in [RELEASE_NOTES.md](RELEASE_NOTES.md).
+Report reproducible problems through [issues](https://github.com/frgfm/lint-my-headers/issues).
+Pull requests should describe changed behavior, checks run, and unverified
+platform/release gates.
+
+## Publishing a release
+
+[GitHub Releases](https://github.com/frgfm/lint-my-headers/releases) holds the
+release history and migration notes. Prepare release text outside the repository.
+Publication and repository mutations require explicit owner authorization.
+
+After the release PR's checks pass, merge it and publish the matching version tag
+from that merged commit. Publishing the GitHub release triggers the
+`distributions` workflow to build, publish, and verify the source archive and
+eight platform wheels on PyPI. Record the immutable release commit SHA in the
+GitHub release body for Action pins.
+
+If PyPI accepts only part of an upload, rerun the failed `publish` and `verify`
+jobs using the retained `release-artifacts` and `release-wheels-*` artifacts.
+Do not rerun `build` or `wheels`: publishing refuses a same-named remote file
+whose SHA-256 differs.
