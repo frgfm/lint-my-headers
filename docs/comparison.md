@@ -9,12 +9,14 @@ A presence check, a fixed header policy, and a REUSE audit answer different ques
 
 ## Features that change the choice
 
-These capabilities describe the versions below, reviewed on **6 October 2026**.
-Tool names link to the version's upstream documentation. The behavior tests and
-performance measurements later on this page are our own results.
+Competitor capabilities were reviewed on **6 October 2026**. LMH capabilities
+include the changes merged into `main` as of **15 October 2026**, planned for
+0.8.0. The published release is still 0.7.0. Tool names link to upstream
+documentation; behavior tests and performance measurements below use 0.7.0.
 
 | Tool | Read-only check | Insert missing headers | Change existing headers | Remove headers |
 | --- | --- | --- | --- | --- |
+| **[LMH main / next 0.8.0](configuration.md)** | Declared owner, years, and notice. | Yes, with an explicitly declared creation year, owner, and notice. | Refresh one eligible end year. | No. |
 | **[LMH 0.7.0](configuration.md)** | Declared owner, years, and notice. | No. Reports missing headers. | Refresh one eligible end year. | No. |
 | **[HawkEye 7.2.0](https://github.com/fast/hawkeye/tree/v7.2.0)** | Match a configured template. | Yes. | Replace a recognized header with the template. | Yes, recognized headers. |
 | **[addlicense 1.2.0](https://github.com/google/addlicense/tree/v1.2.0)** | Check header presence. | Yes. | Leaves recognized existing headers in place. | No. |
@@ -23,13 +25,15 @@ performance measurements later on this page are our own results.
 | **[licenseheaders 0.8.8](https://github.com/johann-petrak/licenseheaders/tree/v0.8.8)** | Dry run of proposed edits; no dedicated checking command. | Yes. | Apply templates, or replace the year field without a template. | No dedicated command. |
 | **[NWA 0.8.0](https://github.com/B1NARY-GR0UP/nwa/tree/v0.8.0)** | Match a template; optional year-insensitive matching. | Yes. | Rewrite headers; update has documented layout limits. | Yes. |
 
-**LMH's edit limit is deliberate:** it keeps the creation year, other bytes, and
-file mode. It refuses ambiguous, linked, or concurrently changed targets.
+**LMH keeps existing-header edits to one end year.** Missing-header insertion
+requires a declared creation year and preserves the original source bytes.
+Both repairs preserve file mode and refuse ambiguous, linked, or concurrently
+changed targets.
 A template replacement can change more text. Use it when that is the job you need.
 
 | Tool | Configuration | JSON check output | SPDX support | Other useful features |
 | --- | --- | --- | --- | --- |
-| LMH | TOML or existing Python/Cargo/JavaScript manifests. | Yes; versioned diagnostics. | 0.7.0 can use custom notice text; no built-in SPDX copyright/license pair parsing. | First-party pre-commit/prek hook and GitHub Action. Explicit exclusions; no Git ignore rules. |
+| LMH | TOML or existing Python/Cargo/JavaScript manifests. | Yes; versioned diagnostics. | `main` supports single-owner SPDX copyright/license pairs; 0.7.0 supports custom notice text only. | First-party pre-commit/prek hook and GitHub Action. Explicit exclusions; no Git ignore rules. |
 | HawkEye | TOML, templates and styles. | Yes. | Can match SPDX text in a template. | Git ignore rules, optional Git history values, pre-commit hooks. |
 | addlicense | CLI flags, custom header file, ignore patterns. | No dedicated JSON checker output. | Can emit SPDX license identifiers. | First-party pre-commit hook; small native binary. |
 | License Eye | YAML, header text/patterns, comment styles. | No dedicated JSON header-check output. | SPDX license templates and dependency identification. | Git ignore rules, header diffs, dependency summaries, GitHub Actions. |
@@ -46,7 +50,8 @@ files, or dependency license compatibility. See the
 We tested one clean Python source, then removed its header, changed its owner,
 or made its end year stale. Template checkers used a fixed policy: owner
 **Benchmark**, years **2024–2026**, and an Apache-2.0 notice. REUSE used its
-accepted SPDX declarations and a license text. Every check kept source bytes unchanged.
+accepted SPDX declarations and a license text. Every check kept source bytes
+unchanged. These probes used published LMH 0.7.0.
 
 | Tool | Clean file passes | Missing header fails | Different owner fails | Stale end year fails |
 | --- | --- | --- | --- | --- |
@@ -215,16 +220,20 @@ No benchmark or plotting package is required.
 ## Where LMH fits
 
 Choose LMH when you need a declared owner/year/notice policy, structured
-diagnostics, and a limited year repair. Published 0.7.0 requires its documented
-prose layout and explicit exclusions. It does not insert missing headers,
-audit dependency licenses, infer ownership, or check the full REUSE convention.
+diagnostics, and limited repairs. Existing headers receive only an eligible
+end-year update. On `main`, `fix` can also insert missing headers when the owner,
+notice, and actual creation year are explicitly declared. Without a creation
+year, missing headers remain unresolved.
 
-[PR #113](https://github.com/frgfm/lint-my-headers/pull/113) adds ordinary block
-comments and SPDX copyright/license pairs. Those changes are unreleased and
-are not included in the 0.7.0 feature claims or timings above.
+[PR #113](https://github.com/frgfm/lint-my-headers/pull/113) is merged. It adds
+missing-header insertion, common copyright lines, ordinary block headers, and
+single-owner SPDX copyright/license pairs. These features are planned for 0.8.0;
+the recorded timings, behavior probes, and installed sizes above remain evidence
+for published **0.7.0**. They have not been rerun for the new implementation.
 
-Choose a template tool when you need to insert or rewrite headers. Choose
-REUSE when the per-file declaration convention is your requirement. Choose
-License Eye when dependency license work is part of the job. Check a sample
+Choose a template tool when you need to rewrite or remove existing headers.
+Choose REUSE when the per-file declaration convention is your requirement.
+Choose License Eye when dependency license work is part of the job. Check a sample
 header against [LMH's layouts](configuration.md#header-layouts) before migrating;
-accepted layouts and write guarantees differ.
+accepted layouts and write guarantees differ. LMH does not infer ownership,
+licensing, or creation years, audit dependencies, or establish REUSE compliance.

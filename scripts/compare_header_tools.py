@@ -12,7 +12,7 @@
 
 import argparse
 import csv
-import datetime
+import datetime as dt
 import hashlib
 import json
 import os
@@ -300,7 +300,7 @@ def main() -> None:
             parser.error(f"Provide an absolute executable path for {tool}")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    year = datetime.datetime.now(datetime.timezone.utc).year
+    year = dt.datetime.now(dt.timezone.utc).year
     with tempfile.TemporaryDirectory(prefix="header-tools-") as temp:
         work = Path(temp)
         templates, commands = probe_headers(work, tools, year, args.license_file.resolve(), output)
@@ -309,7 +309,7 @@ def main() -> None:
         samples = measure_files(work, templates, commands, args.files, args.runs, args.bytes, output)
     write_results(samples, args.files, args.bytes, output)
     metadata = {
-        "recorded_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "recorded_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "platform": platform.platform(),
         "machine": platform.machine(),
         "python": platform.python_version(),

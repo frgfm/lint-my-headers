@@ -47,7 +47,7 @@ Choose by the checks and edits your project needs:
 
 | Tool | Check | Edits | Implementation |
 | --- | --- | --- | --- |
-| **Lint My Headers** | Declared owner, years, and notice. | One eligible end year. | Native Rust. |
+| **Lint My Headers** | Declared owner, years, and notice. | One eligible end year; declared missing-header insertion on `main`. | Native Rust. |
 | [HawkEye](https://github.com/fast/hawkeye) | Header template. | Insert, rewrite, remove. | Native Rust. |
 | [addlicense](https://github.com/google/addlicense) | Header presence. | Insert missing headers. | Native Go. |
 | [License Eye](https://github.com/apache/skywalking-eyes) | Headers and dependency licenses. | Insert or rewrite; dependency summaries. | Native Go. |
@@ -55,9 +55,11 @@ Choose by the checks and edits your project needs:
 | [licenseheaders](https://github.com/johann-petrak/licenseheaders) | Edit dry run; no dedicated checker. | Templates or year fields. | Python. |
 | [NWA](https://github.com/B1NARY-GR0UP/nwa) | Header template. | Insert, rewrite, remove. | Native Go. |
 
-LMH keeps the creation year, other bytes, and file mode. Missing headers need
-manual insertion. It does not inspect dependency licenses or check the REUSE
-convention. The [full comparison](docs/comparison.md) covers SPDX/JSON support,
+LMH keeps the creation year, other bytes, and file mode. Published 0.7.0
+requires manual insertion of missing headers; `main` adds insertion with an
+explicit creation year, owner, and notice, planned for 0.8.0. It does not inspect
+dependency licenses or check the REUSE convention. The
+[full comparison](docs/comparison.md) covers SPDX/JSON support,
 behavior tests, runtime requirements, installation steps, and measured disk use.
 
 ## Performance
@@ -65,7 +67,8 @@ behavior tests, runtime requirements, installation steps, and measured disk use.
 Fresh CLI checks on **1 KiB Python files**, measured on an **Apple M3 Pro,
 macOS 15.7.7, APFS**. Seven trials after warmup; median latency and derived
 bulk throughput. Peak RSS is the highest process memory seen in seven separate
-10,000-file runs.
+10,000-file runs. The LMH measurements use the published **0.7.0** wheel;
+they have not been rerun for the upcoming 0.8.0 implementation.
 
 | Tool / check scope | 10 files | 10,000 files | Bulk files/s | Peak RSS |
 | --- | ---: | ---: | ---: | ---: |
