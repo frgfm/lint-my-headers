@@ -52,7 +52,7 @@ ignore-files = ["version.py", "__init__.py", "collect_env.py"]
 ignore-folders = [".agents/skills/lint-my-headers/evals/files"]
 
 [dependency-groups]
-build = ["uv>=0.12.20"]
+build = ["uv>=0.13.4"]
 docs = ["zensical==0.0.67"]
 quality = [
     "ruff==0.17.0",
