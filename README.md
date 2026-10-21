@@ -385,7 +385,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.5"
+          version: "0.13.4"
       - name: Create the annual pull request
         shell: bash
         env:

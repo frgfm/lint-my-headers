@@ -135,7 +135,7 @@ Before the first deployment:
    to `frgfm/lint-my-headers`. Select `main` as the production branch and the
    repository root as the root directory.
 3. Set the build command to
-   `python -m pip install uv==0.12.5 && make docs-cloudflare` and the deploy
+   `python -m pip install uv==0.13.4 && make docs-cloudflare` and the deploy
    command to `npx --yes wrangler@4.147.0 deploy`.
 4. Set the build environment variable `SKIP_DEPENDENCY_INSTALL=1` so the build
    command installs only the documentation dependencies. Cloudflare's build

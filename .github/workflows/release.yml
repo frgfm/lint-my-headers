@@ -10,7 +10,7 @@ on:
     types: [published]
 
 env:
-  RELEASE_UV_VERSION: "0.12.5"
+  RELEASE_UV_VERSION: "0.13.4"
 
 jobs:
   build:

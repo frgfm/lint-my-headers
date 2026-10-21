@@ -10,9 +10,13 @@
 # ]
 # ///
 
+import tomllib
 from pathlib import Path
 
 import yaml
+
+EXPECTED_UV_VERSION = "0.13.4"
+EXPECTED_UV_REQUIREMENT = f"uv>={EXPECTED_UV_VERSION},<1.0.0"
 
 
 def main():
@@ -30,8 +34,17 @@ def main():
                 if name in {"UV_VERSION", "RELEASE_UV_VERSION"}:
                     deps_dict["uv"].append({"file": str(workflow_file), "version": version.lstrip("v")})
 
-    # Assert all deps are in sync
     troubles = []
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    build_requirements = pyproject.get("dependency-groups", {}).get("build", [])
+    uv_requirements = [requirement for requirement in build_requirements if requirement.startswith("uv")]
+    if uv_requirements != [EXPECTED_UV_REQUIREMENT]:
+        troubles.append(
+            f"pyproject.toml [dependency-groups].build must contain {EXPECTED_UV_REQUIREMENT!r}, "
+            f"found {uv_requirements!r}"
+        )
+
+    # Assert all CI pins are in sync.
     for dep, versions in deps_dict.items():
         versions_ = {v["version"] for v in versions}
         if len(versions_) != 1:
@@ -42,6 +55,13 @@ def main():
                 f"{dep}:",
                 "\n".join(f"- '{v}': {', '.join(files)}" for v, files in inv_dict.items()),
             ])
+
+    uv_versions = {version["version"] for version in deps_dict["uv"]}
+    if uv_versions != {EXPECTED_UV_VERSION}:
+        troubles.append(
+            f"uv CI pins must be {EXPECTED_UV_VERSION} to match {EXPECTED_UV_REQUIREMENT!r}; "
+            f"found {sorted(uv_versions)}"
+        )
 
     if len(troubles) > 0:
         raise ValueError("Some dependencies are out of sync:\n\n" + "\n".join(troubles))
