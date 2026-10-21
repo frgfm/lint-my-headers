@@ -53,7 +53,7 @@ quality = [
 [package.metadata]
 
 [package.metadata.requires-dev]
-build = [{ name = "uv", specifier = ">=0.13.4" }]
+build = [{ name = "uv", specifier = ">=0.13.4,<1.0.0" }]
 docs = [{ name = "zensical", specifier = "==0.0.67" }]
 quality = [
     { name = "prek", specifier = "==0.5.5" },
