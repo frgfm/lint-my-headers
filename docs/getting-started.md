@@ -108,10 +108,17 @@ For a recognized header ending in 2025, `lmh check` reports `LMH004`. When the
 diagnostic is marked fixable and source changes are authorized:
 
 ```shell
+# Available in unreleased development builds:
+lmh fix --diff
+
 lmh fix
 lmh check
 git diff
 ```
+
+`fix --diff` prints eligible repairs as unified diffs without writing source
+files. The option is available only with text output and the `fix` command.
+Exit code `1` means that the preview contains proposals or that findings remain.
 
 In 2026, a creation year of `2024` with an end year of `2025` becomes
 `2024-2026`. The tool retains the creation year and every other byte. It leaves

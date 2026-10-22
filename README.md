@@ -139,10 +139,18 @@ src/example.py:1:1: LMH004 copyright year ends at 2025; expected 2026 [fixable]
 Refresh recognized stale years and review the result:
 
 ```shell
+# Available in unreleased development builds:
+lmh fix --diff
+
+# Apply the approved repairs:
 lmh fix
 lmh check
 git diff
 ```
+
+`fix --diff` prints proposed repairs as unified diffs and never writes source
+files. It is text-only and returns exit code `1` when it finds proposals or
+unresolved findings.
 
 A 2026 refresh produces a diff like this:
 

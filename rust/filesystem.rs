@@ -384,6 +384,14 @@ fn matches(path: &Path, original: &Snapshot, project_root: &Path) -> io::Result<
         }))
 }
 
+pub(crate) fn is_current(
+    path: &Path,
+    original: &Snapshot,
+    project_root: &Path,
+) -> io::Result<bool> {
+    matches(path, original, project_root)
+}
+
 pub fn replace(
     path: &Path,
     original: &Snapshot,
@@ -398,7 +406,7 @@ pub fn replace(
                 .unwrap_or_else(|| "repair target is unsafe".into()),
         )
     })?;
-    if !matches(path, original, project_root)? {
+    if !is_current(path, original, project_root)? {
         return Err(RepairError::Unsafe(
             "repair target changed before writing".into(),
         ));
