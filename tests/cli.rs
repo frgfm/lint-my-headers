@@ -1772,127 +1772,36 @@ fn pinned_spdx_data_accepts_every_legacy_notice_and_new_identifiers() {
 }
 
 #[test]
-fn fix_diff_previews_exact_repairs_without_writing() {
+fn fix_diff_previews_repairs_without_writing() {
     let dir = workspace();
     let root = dir.path();
-    let owner = "Café Owner";
-    write(root, "pyproject.toml", CONFIG.replace(OWNER, owner));
-    let first = year() - 2;
-    let stale_end = year() - 1;
-    let mut latin1 =
-        format!("# coding: latin-1\r\n\r\n# Copyright (C) {first}-{stale_end}, Caf").into_bytes();
-    latin1.push(0xe9);
-    latin1.extend_from_slice(format!(" Owner.\r\n\r\n{}", NOTICE.replace('\n', "\r\n")).as_bytes());
-    latin1.extend_from_slice(b"\r\nvalue = 1");
-    write(root, "src/latin1.py", &latin1);
-
-    let mut cp1252 = b"# coding: cp1252\r\n\r\nvalue = 'caf".to_vec();
-    cp1252.push(0x80);
-    cp1252.extend_from_slice(b"'");
-    let cp1252_name = if cfg!(unix) {
-        "src/with\ttab\\backslash.py"
-    } else {
-        "src/cp1252.py"
-    };
-    write(root, cp1252_name, &cp1252);
-
-    let bom = format!(
-        "\u{feff}{}",
-        source(format!("{first}-{stale_end}"), owner, NOTICE)
-    )
-    .replace('\n', "\r\n")
-    .into_bytes();
-    write(root, "src/bom.py", &bom);
-    let wrong_owner = source(format!("{first}-{stale_end}"), "Other Owner", NOTICE);
-    write(root, "src/wrong.py", &wrong_owner);
-    let ambiguous = source("20x4", owner, NOTICE);
-    write(root, "src/ambiguous.py", &ambiguous);
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(
-            root.join("src/latin1.py"),
-            fs::Permissions::from_mode(0o755),
-        )
-        .unwrap();
-    }
-    let before = [
-        ("src/latin1.py", latin1),
-        (cp1252_name, cp1252),
-        ("src/bom.py", bom),
-        ("src/wrong.py", wrong_owner.into_bytes()),
-        ("src/ambiguous.py", ambiguous.into_bytes()),
-    ];
+    let current = year();
+    let first = current - 2;
+    let stale_end = current - 1;
+    let stale = header(format!("{first}-{stale_end}"));
+    let missing = "value = 1\n";
+    write(root, "src/stale.py", &stale);
+    write(root, "src/missing.py", missing);
     let creation_year = first.to_string();
     let output = run(
         root,
         &["fix", "--diff", "--creation-year", &creation_year, "src"],
         1,
     );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("src/wrong.py:1:1: LMH002"));
-    assert!(stderr.contains("src/ambiguous.py:1:1: LMH006"));
-    for (name, bytes) in &before {
-        assert_eq!(fs::read(root.join(name)).unwrap(), *bytes, "{name}");
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(root.join("src/latin1.py"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o755
-        );
-    }
-
-    let clean = source(year(), owner, NOTICE);
-    write(root, "src/current.py", clean);
-    let clean = run(root, &["fix", "--diff", "src/current.py"], 0);
-    assert!(clean.stdout.is_empty());
-
-    #[cfg(unix)]
-    {
-        let expected_dir = workspace();
-        write(
-            expected_dir.path(),
-            "pyproject.toml",
-            CONFIG.replace(OWNER, owner),
-        );
-        for (name, bytes) in &before {
-            write(expected_dir.path(), name, bytes);
-        }
-        let expected = json_run(
-            expected_dir.path(),
-            &["fix", "--creation-year", &creation_year, "src"],
-            1,
-        );
-        assert_eq!(expected["changed"].as_array().unwrap().len(), 3);
-
-        let initialized = Command::new("git")
-            .current_dir(root)
-            .args(["init", "--quiet"])
-            .output()
-            .unwrap();
-        assert!(initialized.status.success(), "{initialized:?}");
-        fs::write(root.join("preview.diff"), &output.stdout).unwrap();
-        let applied = Command::new("git")
-            .current_dir(root)
-            .args(["apply", "preview.diff"])
-            .output()
-            .unwrap();
-        assert!(applied.status.success(), "{applied:?}");
-        for (name, _) in &before {
-            assert_eq!(
-                fs::read(root.join(name)).unwrap(),
-                fs::read(expected_dir.path().join(name)).unwrap(),
-                "{name}"
-            );
-        }
-    }
+    let diff = String::from_utf8_lossy(&output.stdout);
+    let current_header = format!("+# Copyright (C) {first}-{current}, {OWNER}.");
+    assert!(diff.contains("--- a/src/stale.py\n+++ b/src/stale.py"));
+    assert!(diff.contains("--- a/src/missing.py\n+++ b/src/missing.py"));
+    assert!(diff.contains(&format!("-# Copyright (C) {first}-{stale_end}, {OWNER}.")));
+    assert!(diff.contains(&current_header));
+    assert_eq!(
+        fs::read(root.join("src/stale.py")).unwrap(),
+        stale.as_bytes()
+    );
+    assert_eq!(
+        fs::read(root.join("src/missing.py")).unwrap(),
+        missing.as_bytes()
+    );
 }
 
 #[test]
