@@ -96,6 +96,9 @@ uv tool install lint-my-headers==0.8.0
 
 Or install with pip: `python -m pip install lint-my-headers==0.8.0`.
 
+To run the bundled native command without installing Python, see the
+[wheel extraction guide](docs/native-installation.md).
+
 Version **0.8.0** supports all nine languages and policy in `.lmh.toml`,
 `pyproject.toml`, `Cargo.toml`, or `package.json`. Select your project's languages
 in the policy; the default remains Python.

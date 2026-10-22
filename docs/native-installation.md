@@ -1,19 +1,12 @@
 ---
-description: Install the upcoming standalone native archives for Linux, macOS, and Windows.
+description: Run the native LMH executables by extracting them from a matching PyPI wheel.
 ---
 
 # Native installation
 
-!!! warning "Unreleased"
-    This page describes native GitHub Release archives planned for an upcoming
-    release. Version **0.8.0 has no native archive assets**. Install 0.8.0 with
-    [uv or pip](getting-started.md#install) until a later release lists these files.
+The PyPI wheels include the `lmh` and `lint-my-headers` native executables. You can extract and run them without Python, Rust, or uv. Download the wheel for your operating system and CPU from the [0.8.0 PyPI files](https://pypi.org/project/lint-my-headers/0.8.0/#files); PyPI lists each file's SHA-256 digest.
 
-Each archive contains the `lmh` and `lint-my-headers` commands plus the project
-license. The commands run without Python, Rust, or uv. Linux and macOS archives
-are `.tar.gz`; Windows archives are `.zip`. Each archive has a `.sha256` file.
-
-| Platform | Target |
+| Platform | Wheel target |
 | --- | --- |
 | Linux x86_64, glibc 2.28+ | `x86_64-unknown-linux-gnu` |
 | Linux ARM64, glibc 2.28+ | `aarch64-unknown-linux-gnu` |
@@ -24,48 +17,28 @@ are `.tar.gz`; Windows archives are `.zip`. Each archive has a `.sha256` file.
 | Windows x86_64 | `x86_64-pc-windows-msvc` |
 | Windows ARM64 | `aarch64-pc-windows-msvc` |
 
-Download the archive and its checksum from a future release page. Asset names
-use `lint-my-headers-<version>-<target>`, followed by `.tar.gz` or `.zip`;
-the checksum filename adds `.sha256`. In the commands below, set `VERSION`
-without the leading `v` and `TARGET` to the exact target shown in the table.
+## Linux and macOS
 
-On Linux, verify and install the archive into a directory on `PATH`:
+For example, extract the Linux x86_64 wheel into a local folder, then run the binary from the wheel's `scripts` directory:
 
 ```shell
-VERSION="REPLACE_WITH_VERSION"
-TARGET="x86_64-unknown-linux-gnu"
-ARCHIVE="lint-my-headers-${VERSION}-${TARGET}.tar.gz"
-sha256sum -c "$ARCHIVE.sha256"
-mkdir -p "$HOME/.local/bin"
-tar -xzf "$ARCHIVE" -C "$HOME/.local/bin" lmh lint-my-headers
-export PATH="$HOME/.local/bin:$PATH"
-lmh --version
+wheel=lint_my_headers-0.8.0-py3-none-manylinux_2_28_x86_64.whl
+unzip -q "$wheel" -d lmh-wheel
+PATH="$PWD/lmh-wheel/lint_my_headers-0.8.0.data/scripts:$PATH" lmh --version
 ```
 
-On macOS, set `ARCHIVE` to the downloaded `.tar.gz` filename and run
-`shasum -a 256 -c "$ARCHIVE.sha256"`, then extract `lmh` and
-`lint-my-headers` into a directory on `PATH`:
+Use the matching wheel file and target folder for your platform. Keep the extracted wheel directory intact; it also contains the project license.
 
-```shell
-shasum -a 256 -c "$ARCHIVE.sha256"
-mkdir -p "$HOME/.local/bin"
-tar -xzf "$ARCHIVE" -C "$HOME/.local/bin" lmh lint-my-headers
-export PATH="$HOME/.local/bin:$PATH"
-lmh --version
-```
+## Windows
 
-On Windows, set `$Archive` to the downloaded `.zip` file and verify it before
-extracting. The archive contains `lmh.exe` and `lint-my-headers.exe`:
+Rename the downloaded `.whl` file to `.zip`, then extract it with Windows Explorer or PowerShell:
 
 ```powershell
-$Archive = "path\to\downloaded.zip"
-$Expected = ((Get-Content "${Archive}.sha256") -split '\s+')[0]
-$Actual = (Get-FileHash $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($Expected -ne $Actual) { throw "SHA-256 mismatch" }
-$Destination = "$env:USERPROFILE\bin\lmh"
-Expand-Archive $Archive $Destination
-$env:Path = "$Destination;$env:Path"
-lmh --version
+Copy-Item .\lint_my_headers-0.8.0-py3-none-win_amd64.whl .\lmh.zip
+Expand-Archive .\lmh.zip -DestinationPath .\lmh-wheel
+& .\lmh-wheel\lint_my_headers-0.8.0.data\scripts\lmh.exe --version
 ```
 
-For the current 0.8.0 release, follow the [published installation steps](getting-started.md#install).
+Choose the `win_arm64` wheel for Windows ARM64. You can add the extracted `scripts` directory to `PATH` to run LMH from any directory.
+
+The usual [uv or pip install](getting-started.md#install) remains available. Direct extraction is useful when you only need the native commands.

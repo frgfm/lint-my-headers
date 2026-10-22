@@ -4,8 +4,7 @@ on:
   pull_request:
     branches: main
     paths: [rust/**, src/**, tests/**, Cargo.*, rust-toolchain.toml, pyproject.toml, uv.lock, Makefile,
-      .github/pypi_release.py, .github/native_release.py, .github/smoke_distribution.py, .github/verify_deps_sync.py,
-      .github/workflows/release.yml,
+      .github/pypi_release.py, .github/smoke_distribution.py, .github/verify_deps_sync.py, .github/workflows/release.yml,
       .github/workflows/update-copyright-years.yml, README.md, LICENSE, .git*]
   release:
     types: [published]
@@ -76,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: &release_targets
+        include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             manylinux: "2_28"
@@ -131,83 +130,6 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
           retention-days: 30
-
-  native-assets:
-    needs: [build, wheels]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: *release_targets
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-    steps:
-      - *checkout
-      - *setup_uv
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-wheels-${{ matrix.target }}
-          path: dist
-      - name: Prepare native release archive
-        shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.build.outputs.version }}
-        run: >-
-          uv run --python 3.14 --isolated --no-project .github/native_release.py pack
-          --wheel dist --target "$TARGET" --version "$VERSION" --output native-release
-      - name: Smoke-test extracted musl archive on Alpine
-        if: ${{ contains(matrix.target, 'musl') }}
-        shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.build.outputs.version }}
-        run: >-
-          docker run --rm -v "$PWD:/io" -w /io -e TARGET -e VERSION python:3.14-alpine
-          python /io/.github/native_release.py smoke
-          --archive "/io/native-release/lint-my-headers-$VERSION-$TARGET.tar.gz"
-          --target "$TARGET" --version "$VERSION"
-      - name: Smoke-test extracted native archive
-        if: ${{ !contains(matrix.target, 'musl') }}
-        shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
-          VERSION: ${{ needs.build.outputs.version }}
-        run: |
-          extension=tar.gz
-          if [[ "$TARGET" == *-windows-msvc ]]; then extension=zip; fi
-          uv run --python 3.14 --isolated --no-project .github/native_release.py smoke \
-            --archive "native-release/lint-my-headers-$VERSION-$TARGET.$extension" \
-            --target "$TARGET" --version "$VERSION"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: native-release-${{ matrix.target }}
-          path: native-release/*
-          if-no-files-found: error
-          retention-days: 30
-
-  github-release:
-    if: github.event_name == 'release'
-    needs: [native-assets]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - *checkout
-      - *setup_uv
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: native-release-*
-          merge-multiple: true
-          path: native-release
-      - name: Upload verified native release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          REPOSITORY: ${{ github.repository }}
-        run: >-
-          uv run --python 3.14 --isolated --no-project .github/native_release.py upload
-          --artifacts native-release --tag "$RELEASE_TAG" --repository "$REPOSITORY"
 
   publish:
     if: github.event_name == 'release'
