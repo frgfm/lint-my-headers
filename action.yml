@@ -18,6 +18,10 @@ inputs:
     description: 'Earliest accepted file start year; overrides project configuration'
     required: false
     default: '__from_config__'
+  year-policy:
+    description: 'Whether to refresh historical end years (current or preserve); overrides project configuration'
+    required: false
+    default: '__from_config__'
   license:
     # https://spdx.org/licenses/
     description: 'SPDX license identifier; overrides project configuration'
@@ -73,6 +77,7 @@ runs:
         INPUT_VERSION: ${{ inputs.version }}
         INPUT_OWNER: ${{ inputs.owner }}
         INPUT_STARTING_YEAR: ${{ inputs.starting-year }}
+        INPUT_YEAR_POLICY: ${{ inputs.year-policy }}
         INPUT_LICENSE: ${{ inputs.license }}
         INPUT_FOLDERS: ${{ inputs.folders }}
         INPUT_IGNORE_FILES: ${{ inputs.ignore-files }}
@@ -83,6 +88,7 @@ runs:
         args=("$INPUT_MODE")
         if [[ "$INPUT_OWNER" != '__from_config__' ]]; then args+=(--owner "$INPUT_OWNER"); fi
         if [[ "$INPUT_STARTING_YEAR" != '__from_config__' ]]; then args+=(--starting-year "$INPUT_STARTING_YEAR"); fi
+        if [[ "$INPUT_YEAR_POLICY" != '__from_config__' ]]; then args+=(--year-policy "$INPUT_YEAR_POLICY"); fi
         if [[ "$INPUT_LICENSE" != '__from_config__' ]]; then args+=(--license "$INPUT_LICENSE"); fi
         if [[ "$INPUT_FOLDERS" != '__from_config__' ]]; then args+=(--folders "$INPUT_FOLDERS"); fi
         if [[ "$INPUT_IGNORE_FILES" != '__from_config__' ]]; then args+=(--ignore-files "$INPUT_IGNORE_FILES"); fi

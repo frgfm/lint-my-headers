@@ -1,4 +1,4 @@
-use crate::model::{Language, Settings};
+use crate::model::{Language, Settings, YearPolicy};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::{Path, PathBuf};
 use toml::{Table, Value};
@@ -8,7 +8,7 @@ const SECTION: &str = "[tool.lint-my-headers]";
 #[derive(Parser, Debug)]
 #[command(
     name = "lmh",
-    about = "Lint source copyright and license headers and conservatively refresh recognized years."
+    about = "Lint source copyright and license headers and apply eligible repairs."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -19,7 +19,7 @@ pub struct Cli {
 pub enum Command {
     /// Check copyright and license headers without writing source files.
     Check(Options),
-    /// Refresh stale years and insert missing headers with a declared creation year.
+    /// Apply eligible year updates and insert missing headers with a declared creation year.
     Fix(Options),
 }
 
@@ -60,6 +60,12 @@ pub struct Options {
     /// Declared first copyright year for missing headers; never inferred.
     #[arg(long, allow_negative_numbers = true)]
     pub creation_year: Option<i32>,
+    #[arg(
+        long,
+        value_enum,
+        help = "Whether to refresh valid historical end years"
+    )]
+    pub year_policy: Option<YearPolicy>,
     #[arg(long)]
     pub license: Option<String>,
     #[arg(long)]
@@ -162,6 +168,10 @@ fn config_table(path: &Path) -> Result<Option<Table>, String> {
                 .as_integer()
                 .is_none_or(|v| !(1000..=9999).contains(&v))
                 .then_some("expected a four-digit integer"),
+            "year-policy" => value
+                .as_str()
+                .is_none_or(|value| YearPolicy::from_str(value, false).is_err())
+                .then_some("expected current or preserve"),
             "paths" | "languages" | "ignore-files" | "ignore-folders" => match value.as_array() {
                 Some(items)
                     if items
@@ -294,6 +304,13 @@ pub fn resolve(options: &Options) -> Result<Settings, String> {
     Ok(Settings {
         owner,
         year,
+        year_policy: options.year_policy.unwrap_or_else(|| {
+            table
+                .get("year-policy")
+                .and_then(Value::as_str)
+                .and_then(|value| YearPolicy::from_str(value, false).ok())
+                .unwrap_or_default()
+        }),
         creation_year: options.creation_year.or_else(|| {
             table
                 .get("creation-year")

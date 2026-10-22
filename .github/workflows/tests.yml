@@ -74,8 +74,41 @@ jobs:
               path.write_text(f"# Copyright (C) 2024, {owner}.\n\n{notice}\nvalue = 1\n", encoding="utf-8")
 
           write(".action-test/success/stale.py", "François-Guillaume Fernandez")
+          write(".action-test/preserve/historical.py", "François-Guillaume Fernandez")
           write(".action-test/mixed/safe.py", "François-Guillaume Fernandez")
           write(".action-test/mixed/bad.py", "Another Owner")
+          PY
+      - name: Preserve valid historical years
+        id: preserve
+        uses: ./
+        with:
+          version: source
+          license: 'Apache-2.0'
+          owner: 'François-Guillaume Fernandez'
+          starting-year: 2022
+          year-policy: preserve
+          folders: '.action-test/preserve'
+          ignore-files: ''
+          ignore-folders: ''
+      - name: Verify preserved year
+        shell: bash
+        env:
+          CHANGED: ${{ steps.preserve.outputs.changed }}
+          ISSUES: ${{ steps.preserve.outputs.issues }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          if json.loads(os.environ["ISSUES"]) != []:
+              raise SystemExit(f"Unexpected issues: {os.environ['ISSUES']}")
+          if json.loads(os.environ["CHANGED"]) != []:
+              raise SystemExit(f"Unexpected changed files: {os.environ['CHANGED']}")
+          if not Path(".action-test/preserve/historical.py").read_text(encoding="utf-8").startswith(
+              "# Copyright (C) 2024, François-Guillaume Fernandez."
+          ):
+              raise SystemExit("Historical year changed")
           PY
       - name: Fix a stale header
         id: fix

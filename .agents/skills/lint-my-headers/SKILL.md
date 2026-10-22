@@ -44,6 +44,12 @@ Use `--config` when given; otherwise search upward from the invocation directory
 
 If a required value is missing, conflicting, or legally ambiguous, show the evidence and ask for that decision. Do not write configuration yet unless the user asked for setup or modification.
 
+The unreleased `year-policy` option accepts `current` (the default) or `preserve`.
+`preserve` accepts valid historical years without annual refreshes while still
+checking the starting-year floor, year order and future years. In this mode,
+missing-header insertion uses only the explicitly declared `creation-year`.
+Do not recommend this option for version 0.8.0; it is not in that release.
+
 ### 3. Check before changing anything
 
 Run the narrowest applicable read-only command:
@@ -87,7 +93,7 @@ After `fix`:
 - Put policy in one supported project configuration; do not duplicate it in each integration. Header wording and blank lines are shared; Python and Bash/shell use `#`; other supported languages use `//`. Shell scripts use `.sh` or `.bash` with `languages = ["bash"]` (alias `shell`) and a blank separator after a shebang; extensionless scripts are skipped. C/C++ projects use `.lmh.toml` with `languages = ["c", "cpp"]` (`c++` aliases `cpp`); shared `.h` headers are checked with either selector. Put include guards and `#pragma once` after the ordinary `//` header. Prefer plain-text custom license notices. Rust packages may use `[package.metadata.lint-my-headers]` and virtual workspaces `[workspace.metadata.lint-my-headers]` in `Cargo.toml`, with `languages = ["rust"]`. Go and Swift projects use `.lmh.toml` with their language selected; do not place policy in `go.mod`, `go.work`, or `Package.swift`. Preserve the SwiftPM tools-version directive as the first line with a blank separator before the header.
 - Prefer the README's wheel-only local `lmh` hook with an exact verified PyPI version. The first-party Rust hook is for source checkouts. Use explicit placeholders when publication cannot be verified without unauthorized network access.
 - Give pull-request checks read-only `contents` permission.
-- Treat annual year refresh as an optional project convention. Use a deterministic review branch and pull request, never a direct default-branch write.
+- Treat annual year refresh as an optional project convention. Use `current` policy for refreshes; `preserve` makes a year-only annual workflow a no-op. Use a deterministic review branch and pull request, never a direct default-branch write.
 - Preserve existing Action inputs for compatibility, but omit overrides when repository config is authoritative.
 - The Action defaults to the exact package version declared by its ref, without source-build fallback. Use `version: source` explicitly for unreleased code; never infer that a checked-out package version has been published.
 

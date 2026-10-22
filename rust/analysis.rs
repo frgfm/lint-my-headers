@@ -1,4 +1,4 @@
-use crate::model::{Diagnostic, HeaderPolicy, Language, Settings};
+use crate::model::{Diagnostic, HeaderPolicy, Language, Settings, YearPolicy};
 use regex::Regex;
 use serde_json::Value;
 use std::{borrow::Cow, fs, sync::LazyLock};
@@ -123,15 +123,18 @@ pub fn build_policy(settings: &Settings, current_year: i32) -> Result<HeaderPoli
             "One of the following args needs to be specified: 'license', 'license-notice'".into(),
         );
     }
-    let years = if settings.year == current_year {
-        current_year.to_string()
-    } else {
-        format!("<FILE_CREATION_YEAR>-{current_year}")
+    let years = match settings.year_policy {
+        YearPolicy::Current if settings.year != current_year => {
+            format!("<FILE_CREATION_YEAR>-{current_year}")
+        }
+        YearPolicy::Current => current_year.to_string(),
+        YearPolicy::Preserve => "<FILE_CREATION_YEAR>".into(),
     };
     Ok(HeaderPolicy {
         owner: settings.owner.clone(),
         starting_year: settings.year,
         current_year,
+        year_policy: settings.year_policy,
         creation_year: settings.creation_year,
         expected_header: format!(
             "Copyright (C) {years}, {}.\n\n{}",
@@ -611,7 +614,7 @@ fn missing_header_edit(
     {
         return None;
     }
-    let years = if year == policy.current_year {
+    let years = if policy.year_policy == YearPolicy::Preserve || year == policy.current_year {
         year.to_string()
     } else {
         format!("{year}-{}", policy.current_year)
@@ -963,7 +966,7 @@ pub(crate) fn inspect(raw: &[u8], policy: &HeaderPolicy, display_path: &str) -> 
         );
     }
     let last_year = end_year.unwrap_or(start_year);
-    if last_year == policy.current_year {
+    if policy.year_policy == YearPolicy::Preserve || last_year == policy.current_year {
         return Inspection::default();
     }
     let mut result = problem(
@@ -1024,6 +1027,7 @@ mod tests {
             owner: "Example Owner".into(),
             starting_year: 2022,
             current_year: 2030,
+            year_policy: YearPolicy::Current,
             creation_year: None,
             license_notices: vec!["License notice.\n".into()],
             expected_header: String::new(),
@@ -1230,6 +1234,53 @@ mod tests {
         assert!(
             !diagnostic.fixable && result.replacement.is_none(),
             "{path}: {raw:?}"
+        );
+    }
+
+    #[test]
+    fn preserve_policy_accepts_valid_history_but_checks_year_bounds_and_order() {
+        let mut policy = policy();
+        policy.year_policy = YearPolicy::Preserve;
+        for years in ["2022", "2024-2025", "2024-2030"] {
+            assert!(
+                analyze(header(years).as_bytes(), &policy, "file.py")
+                    .diagnostic
+                    .is_none()
+            );
+        }
+        for years in ["2021", "2024-2023", "2024-2031", "2031"] {
+            assert_refused(&header(years), &policy, "file.py", "LMH003");
+        }
+        assert_refused(&header("2024-20"), &policy, "file.py", "LMH006");
+        assert_refused(
+            &header("2024").replace("Example Owner", "Another Owner"),
+            &policy,
+            "file.py",
+            "LMH002",
+        );
+        assert_refused(
+            &header("2024").replace("License notice.", "Wrong notice."),
+            &policy,
+            "file.py",
+            "LMH005",
+        );
+    }
+
+    #[test]
+    fn preserve_policy_inserts_only_the_declared_creation_year() {
+        let mut policy = policy();
+        policy.year_policy = YearPolicy::Preserve;
+        policy.creation_year = Some(2024);
+        let fixed = analyze(b"value = 1\n", &policy, "file.py")
+            .replacement
+            .unwrap();
+        let fixed = String::from_utf8(fixed).unwrap();
+        assert!(fixed.starts_with("# Copyright (C) 2024, Example Owner."));
+        assert!(!fixed.lines().next().unwrap().contains("2030"));
+        assert!(
+            analyze(fixed.as_bytes(), &policy, "file.py")
+                .diagnostic
+                .is_none()
         );
     }
 

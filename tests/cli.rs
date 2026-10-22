@@ -97,6 +97,48 @@ fn insertion_requires_a_declared_year_and_check_never_writes() {
 }
 
 #[test]
+fn preserve_policy_keeps_historical_years_and_limits_insertions_to_creation_year() {
+    let dir = workspace();
+    let root = dir.path();
+    let declared_year = year() - 2;
+    let historical = header(declared_year);
+    write(root, "src/historical.py", &historical);
+    write(root, "src/missing.py", "value = 1\n");
+    write(
+        root,
+        "pyproject.toml",
+        format!("{CONFIG}year-policy = 'preserve'\ncreation-year = {declared_year}\n"),
+    );
+
+    let checked = json_run(root, &["check"], 1);
+    assert_eq!(checked["diagnostics"].as_array().unwrap().len(), 1);
+    assert_eq!(checked["diagnostics"][0]["path"], "src/missing.py");
+    assert_eq!(checked["diagnostics"][0]["code"], "LMH001");
+    assert_eq!(
+        fs::read(root.join("src/historical.py")).unwrap(),
+        historical.as_bytes()
+    );
+
+    let current = json_run(
+        root,
+        &["check", "--year-policy", "current", "src/historical.py"],
+        1,
+    );
+    assert_eq!(current["diagnostics"][0]["code"], "LMH004");
+    assert_eq!(
+        json_run(root, &["fix"], 0)["changed"],
+        json!(["src/missing.py"])
+    );
+    assert_eq!(
+        fs::read(root.join("src/historical.py")).unwrap(),
+        historical.as_bytes()
+    );
+    let inserted = fs::read_to_string(root.join("src/missing.py")).unwrap();
+    assert!(inserted.starts_with(&format!("# Copyright (C) {declared_year}, {OWNER}.")));
+    json_run(root, &["check"], 0);
+}
+
+#[test]
 fn new_layouts_repair_exact_bytes_and_refused_headers_never_write() {
     let dir = workspace();
     let root = dir.path();
@@ -1267,6 +1309,8 @@ fn invalid_config_is_rejected_before_any_write() {
         ("starting-year", "true"),
         ("starting-year", "2022.0"),
         ("starting-year", "999"),
+        ("year-policy", "'future'"),
+        ("year-policy", "true"),
         ("creation-year", "'2024'"),
         ("creation-year", "999"),
         ("license", "4"),

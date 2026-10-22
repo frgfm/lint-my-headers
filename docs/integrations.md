@@ -111,6 +111,7 @@ Configure `languages` in the repository's policy for multilingual checks.
 | `version` | Exact stable/RC PyPI version, or `source`; empty uses the Action ref's package version. |
 | `mode` | `check` (default) or `fix`. |
 | `owner`, `starting-year` | Override the configured ownership/year policy. |
+| `year-policy` | Override the configured year policy; `current` or `preserve` (unreleased). |
 | `license`, `license-notice` | Override the selected license source. |
 | `folders` | Override configured source paths. |
 | `ignore-files`, `ignore-folders` | Override exclusions with comma-separated lists. |

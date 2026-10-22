@@ -38,6 +38,8 @@ or from a coding agent. Review each finding and each proposed year update.
   before code, keeping header-like text in program bodies out of repairs.
 - **Precise, reviewable fixes.** Refreshes recognized stale years while preserving the
   creation year, owner, all other bytes, and file permissions.
+- **Unreleased: preserve historical years.** Set `year-policy = "preserve"` to accept
+  valid historical year ranges without annual refreshes. The default remains `current`.
 - **Fits your workflow.** First-party pre-commit/prek hook, GitHub Action, and stable JSON
   diagnostics for scripts and coding agents.
 
@@ -424,7 +426,7 @@ jobs:
             --body "Annual refresh of recognized Python copyright years using the declared header policy."
 ```
 
-The external UV environment keeps installed dependency files outside the scan and PR. Repairs follow `[tool.lint-my-headers]` paths/exclusions and refresh recognized stale years for its declared owner in supported Python files. Leave `creation-year` unset for this year-only workflow. Missing, ambiguous, unsafe, or wrong-owner notices then require manual review; a failed repair stops before any branch or PR is published. Existing source bytes and modes are preserved. To cover more Python source files, extend the declared paths while preserving generated/vendor exclusions. This annual workflow stages Python changes only.
+The external UV environment keeps installed dependency files outside the scan and PR. Repairs follow `[tool.lint-my-headers]` paths/exclusions and refresh recognized stale years for its declared owner in supported Python files. Leave `creation-year` unset for this year-only workflow. The unreleased `year-policy = "preserve"` option makes it a no-op for valid historical years; use the default `current` policy for annual refreshes. Missing, ambiguous, unsafe, or wrong-owner notices then require manual review; a failed repair stops before any branch or PR is published. Existing source bytes and modes are preserved. To cover more Python source files, extend the declared paths while preserving generated/vendor exclusions. This annual workflow stages Python changes only.
 
 Each year gets one `automation/update-copyright-years-YYYY` branch. Existing PRs, including closed PRs, are left untouched; reopen the existing PR if it was closed by mistake. If a push succeeded but PR creation failed, rerunning resumes PR creation from that branch without overwriting it. If repairs make no changes and no annual branch already exists, no PR is created. Only tracked Python changes are committed; generated untracked files are excluded. Pushes never target the default branch or force-update an existing branch.
 

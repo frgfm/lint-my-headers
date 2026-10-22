@@ -6,6 +6,11 @@ description: Configure explicit ownership and license policies, select languages
 
 One explicit policy for your source files. Choose the languages, paths, and notice that belong to your project.
 
+!!! info "Unreleased"
+    `year-policy = "preserve"` or `--year-policy preserve` accepts valid
+    historical year ranges without annual refreshes. The default `current`
+    policy keeps the existing end-year refresh behavior.
+
 ## Configuration files
 
 Discovery searches upward from the invocation directory and selects the nearest
@@ -52,6 +57,7 @@ SwiftPM/Xcode projects, and shell or C/C++ projects can use `.lmh.toml`;
 | `owner` / `--owner` | Required exact, single-line copyright owner. |
 | `starting-year` / `--starting-year` | Required earliest accepted file creation year. |
 | `creation-year` / `--creation-year` | Optional declared first year for inserting missing headers; default unset. Applies to all selected missing headers, not existing ones. |
+| `year-policy` / `--year-policy` | `current` (default) refreshes valid stale end years; `preserve` accepts valid historical years without refreshing them. |
 | `license` / `--license` | SPDX identifier selecting a prose notice; requires a local `LICENSE`. |
 | `license-notice` / `--license-notice` | Custom notice file; configure exactly one license source. |
 | `paths` / positional paths | Selected files or directories; default `.`. |
@@ -61,6 +67,8 @@ SwiftPM/Xcode projects, and shell or C/C++ projects can use `.lmh.toml`;
 
 Select files with the same actual creation year when inserting headers. Run
 separately for each year; one shared `creation-year` does not describe mixed-age files.
+In `preserve` mode, insertion uses only the declared creation year; `current`
+mode extends it through the current year.
 
 Configuration lists are arrays. CLI language and ignore lists are comma-separated
 and replace the corresponding configured list:

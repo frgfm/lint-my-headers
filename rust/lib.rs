@@ -416,6 +416,7 @@ mod tests {
             owner: "Owner".into(),
             starting_year: 2024,
             current_year: 2030,
+            year_policy: model::YearPolicy::Current,
             creation_year: None,
             license_notices: vec!["Notice.\n".into()],
             expected_header: String::new(),

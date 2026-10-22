@@ -373,11 +373,13 @@ pub fn replace(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::YearPolicy;
 
     fn settings(root: &Path) -> Settings {
         Settings {
             owner: "Owner".into(),
             year: 2020,
+            year_policy: YearPolicy::Current,
             creation_year: None,
             license: None,
             license_notice: None,
