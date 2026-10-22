@@ -71,6 +71,8 @@ pub struct Settings {
     pub languages: Vec<Language>,
     pub ignore_files: Vec<String>,
     pub ignore_folders: Vec<PathBuf>,
+    pub respect_gitignore: bool,
+    pub exclude: Vec<String>,
     pub project_root: PathBuf,
     pub config_path: Option<PathBuf>,
 }

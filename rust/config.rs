@@ -70,6 +70,20 @@ pub struct Options {
     pub ignore_files: Option<String>,
     #[arg(long)]
     pub ignore_folders: Option<String>,
+    #[arg(
+        long,
+        num_args = 0..=1,
+        default_missing_value = "true",
+        require_equals = true,
+        help = "Apply .gitignore rules to directory scans; use =false to override"
+    )]
+    pub respect_gitignore: Option<bool>,
+    #[arg(
+        long,
+        action = clap::ArgAction::Append,
+        help = "Project-relative gitignore-style exclusion pattern; repeat as needed"
+    )]
+    pub exclude: Option<Vec<String>>,
     #[arg(long, value_enum, default_value = "text")]
     pub output_format: OutputFormat,
     /// Explicit files or folders; overrides configured paths.
@@ -162,29 +176,32 @@ fn config_table(path: &Path) -> Result<Option<Table>, String> {
                 .as_integer()
                 .is_none_or(|v| !(1000..=9999).contains(&v))
                 .then_some("expected a four-digit integer"),
-            "paths" | "languages" | "ignore-files" | "ignore-folders" => match value.as_array() {
-                Some(items)
-                    if items
-                        .iter()
-                        .all(|v| v.as_str().is_some_and(|s| !s.is_empty())) =>
-                {
-                    if matches!(key.as_str(), "paths" | "languages") && items.is_empty() {
-                        Some("expected at least one value")
-                    } else if key == "languages"
-                        && items.iter().any(|v| {
-                            Language::from_str(v.as_str().expect("validated string"), false)
-                                .is_err()
-                        })
+            "paths" | "languages" | "ignore-files" | "ignore-folders" | "exclude" => {
+                match value.as_array() {
+                    Some(items)
+                        if items
+                            .iter()
+                            .all(|v| v.as_str().is_some_and(|s| !s.is_empty())) =>
                     {
-                        Some(
-                            "expected python, javascript, typescript, rust, go, swift, bash (alias shell), c, or cpp (alias c++)",
-                        )
-                    } else {
-                        None
+                        if matches!(key.as_str(), "paths" | "languages") && items.is_empty() {
+                            Some("expected at least one value")
+                        } else if key == "languages"
+                            && items.iter().any(|v| {
+                                Language::from_str(v.as_str().expect("validated string"), false)
+                                    .is_err()
+                            })
+                        {
+                            Some(
+                                "expected python, javascript, typescript, rust, go, swift, bash (alias shell), c, or cpp (alias c++)",
+                            )
+                        } else {
+                            None
+                        }
                     }
+                    _ => Some("expected an array of non-empty strings"),
                 }
-                _ => Some("expected an array of non-empty strings"),
-            },
+            }
+            "respect-gitignore" => value.as_bool().is_none().then_some("expected a boolean"),
             _ => Some("unknown key"),
         };
         if let Some(reason) = reason {
@@ -291,6 +308,16 @@ pub fn resolve(options: &Options) -> Result<Settings, String> {
                 .map(|s| root.join(s))
                 .collect()
         });
+    let respect_gitignore = options.respect_gitignore.unwrap_or_else(|| {
+        table
+            .get("respect-gitignore")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    });
+    let exclude = options
+        .exclude
+        .clone()
+        .unwrap_or_else(|| strings(&table, "exclude", &[]));
     Ok(Settings {
         owner,
         year,
@@ -312,6 +339,8 @@ pub fn resolve(options: &Options) -> Result<Settings, String> {
         }),
         ignore_files,
         ignore_folders,
+        respect_gitignore,
+        exclude,
         project_root: root,
         config_path,
     })

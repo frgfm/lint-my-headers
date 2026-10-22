@@ -53,6 +53,7 @@ keep the corresponding `LICENSE` at the project root.
     owner = "Example Organization"
     starting-year = 2024
     license = "Apache-2.0"
+    languages = ["python", "typescript", "rust"]
     paths = ["src", "tests"]
     ignore-files = ["version.py"]
     ignore-folders = ["src/generated"]

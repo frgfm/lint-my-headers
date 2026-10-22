@@ -924,6 +924,7 @@ fn text_diagnostics_and_action_outputs_remain_compatible() {
     let output = run(root, &["check"], 1);
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("Checked 2 files."));
     assert!(stderr.contains("src/stale.py:1:1: LMH004"));
     assert!(stderr.contains("[fixable]") && stderr.contains("Expected header:"));
     let action_output = root.join("github-output.txt");
@@ -944,6 +945,11 @@ fn text_diagnostics_and_action_outputs_remain_compatible() {
             .unwrap()
             .contains("Updated headers:\n- src/stale.py\n")
     );
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("Checked 2 files.")
+    );
     let output = Command::new(env!("CARGO_BIN_EXE_lmh"))
         .current_dir(root)
         .env("GITHUB_OUTPUT", &action_output)
@@ -962,6 +968,72 @@ fn text_diagnostics_and_action_outputs_remain_compatible() {
             .unwrap()
             .ends_with("issues=[]\nchanged=[]\n")
     );
+}
+
+#[test]
+fn zero_file_text_summary_names_languages_and_json_stays_quiet() {
+    let dir = workspace();
+    let root = dir.path();
+    write(root, "src/source.ts", "export const value = 1;\n");
+
+    let output = run(root, &["check"], 0);
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("Checked 0 files."));
+    assert!(stderr.contains("Enabled languages: python"));
+    assert!(stderr.contains("default is Python"));
+    assert!(stderr.contains("--languages"));
+
+    let result = json_run(root, &["check"], 0);
+    assert_eq!(result["schema_version"], 1);
+    assert_eq!(result["checked"], 0);
+    assert_eq!(result["diagnostics"], json!([]));
+}
+
+#[test]
+fn gitignore_and_repeatable_exclusions_select_directory_and_explicit_paths() {
+    let dir = workspace();
+    let root = dir.path();
+    write(
+        root,
+        "pyproject.toml",
+        format!(
+            "{CONFIG}respect-gitignore = true\nexclude = ['/src/generated/', '/src/with,comma/']\n"
+        ),
+    );
+    write(root, ".gitignore", "ignored.py\n");
+    for name in [
+        "ignored.py",
+        "keep.py",
+        "generated/out.py",
+        "with,comma/out.py",
+    ] {
+        write(root, &format!("src/{name}"), header(year()));
+    }
+
+    let result = json_run(root, &["check"], 0);
+    assert_eq!(result["checked"], 1);
+
+    let explicit = json_run(root, &["check", "src/ignored.py"], 0);
+    assert_eq!(explicit["checked"], 1);
+
+    let no_gitignore = json_run(root, &["check", "--respect-gitignore=false"], 0);
+    assert_eq!(no_gitignore["checked"], 2);
+
+    let comma_pattern = json_run(root, &["check", "--exclude", "/src/with,comma/"], 0);
+    assert_eq!(comma_pattern["checked"], 2);
+
+    write(root, ".gitignore", "[z-a]\n");
+    let malformed_ignore = json_run(root, &["check"], 2);
+    assert_eq!(malformed_ignore["error"]["code"], "LMH900");
+
+    write(
+        root,
+        "pyproject.toml",
+        format!("{CONFIG}exclude = ['[z-a]']\n"),
+    );
+    let malformed_pattern = json_run(root, &["check"], 2);
+    assert_eq!(malformed_pattern["error"]["code"], "LMH900");
 }
 
 #[test]
@@ -1279,6 +1351,8 @@ fn invalid_config_is_rejected_before_any_write() {
         ("languages", "'typescript'"),
         ("ignore-files", "[42]"),
         ("ignore-folders", "true"),
+        ("exclude", "[42]"),
+        ("respect-gitignore", "'yes'"),
         ("unknown-key", "true"),
     ] {
         let filtered: Vec<_> = CONFIG

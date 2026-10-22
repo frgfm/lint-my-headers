@@ -35,6 +35,14 @@ inputs:
     description: 'Folders to ignore; overrides project configuration'
     required: false
     default: '__from_config__'
+  respect-gitignore:
+    description: 'Whether to apply .gitignore rules; true or false, overrides project configuration'
+    required: false
+    default: '__from_config__'
+  exclude:
+    description: 'Newline-separated project-relative exclusion patterns; overrides project configuration'
+    required: false
+    default: '__from_config__'
   license-notice:
     description: 'Custom license notice; overrides project configuration'
     required: false
@@ -77,6 +85,8 @@ runs:
         INPUT_FOLDERS: ${{ inputs.folders }}
         INPUT_IGNORE_FILES: ${{ inputs.ignore-files }}
         INPUT_IGNORE_FOLDERS: ${{ inputs.ignore-folders }}
+        INPUT_RESPECT_GITIGNORE: ${{ inputs.respect-gitignore }}
+        INPUT_EXCLUDE: ${{ inputs.exclude }}
         INPUT_LICENSE_NOTICE: ${{ inputs.license-notice }}
         INPUT_MODE: ${{ inputs.mode }}
       run: |
@@ -87,6 +97,16 @@ runs:
         if [[ "$INPUT_FOLDERS" != '__from_config__' ]]; then args+=(--folders "$INPUT_FOLDERS"); fi
         if [[ "$INPUT_IGNORE_FILES" != '__from_config__' ]]; then args+=(--ignore-files "$INPUT_IGNORE_FILES"); fi
         if [[ "$INPUT_IGNORE_FOLDERS" != '__from_config__' ]]; then args+=(--ignore-folders "$INPUT_IGNORE_FOLDERS"); fi
+        if [[ "$INPUT_RESPECT_GITIGNORE" != '__from_config__' ]]; then args+=(--respect-gitignore="$INPUT_RESPECT_GITIGNORE"); fi
+        if [[ "$INPUT_EXCLUDE" != '__from_config__' ]]; then
+          if [[ -z "$INPUT_EXCLUDE" ]]; then
+            args+=(--exclude '')
+          else
+            while IFS= read -r pattern; do
+              [[ -n "$pattern" ]] && args+=(--exclude "$pattern")
+            done <<< "$INPUT_EXCLUDE"
+          fi
+        fi
         if [[ "$INPUT_LICENSE_NOTICE" != '__from_config__' ]]; then args+=(--license-notice "$INPUT_LICENSE_NOTICE"); fi
         if [[ "$INPUT_VERSION" == 'source' ]]; then
           (cd "$GITHUB_ACTION_PATH" && cargo build --quiet --locked --release --target-dir "$GITHUB_ACTION_PATH/target" --bin lmh)

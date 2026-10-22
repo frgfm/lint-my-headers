@@ -1,8 +1,11 @@
 use crate::model::{Language, Settings};
+use ignore::WalkBuilder;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, Metadata, Permissions};
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 #[cfg(unix)]
@@ -18,9 +21,17 @@ fn linked(metadata: &Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
-fn walk(root: &Path, candidates: &mut Vec<PathBuf>, ignored: &[PathBuf]) -> io::Result<()> {
+fn walk(
+    root: &Path,
+    candidates: &mut Vec<PathBuf>,
+    ignored: &[PathBuf],
+    exclude: Option<&Arc<Gitignore>>,
+    project_root: &Path,
+) -> io::Result<()> {
     let key = absolute_key(root)?;
-    if ignored.iter().any(|folder| key.starts_with(folder)) {
+    if ignored.iter().any(|folder| key.starts_with(folder))
+        || exclude_directory(root, exclude, project_root)?
+    {
         return Ok(());
     }
     for entry in fs::read_dir(root)? {
@@ -38,10 +49,127 @@ fn walk(root: &Path, candidates: &mut Vec<PathBuf>, ignored: &[PathBuf]) -> io::
             continue;
         }
         if metadata.is_dir() {
-            walk(&path, candidates, ignored)?;
+            walk(&path, candidates, ignored, exclude, project_root)?;
         } else if metadata.is_file() && Language::from_path(&path).is_some() {
             candidates.push(path);
         }
+    }
+    Ok(())
+}
+
+fn walk_gitignored(
+    root: &Path,
+    candidates: &mut Vec<PathBuf>,
+    ignored_folders: &[PathBuf],
+    exclude: Option<&Arc<Gitignore>>,
+    project_root: &Path,
+) -> io::Result<()> {
+    let root = normalized_absolute(root)?;
+    let project_root = normalized_absolute(project_root)?;
+    let ignored_folders = ignored_folders
+        .iter()
+        .map(|path| normalized_absolute(path))
+        .collect::<io::Result<Vec<_>>>()?;
+    let root_key = absolute_key(&root)?;
+    if ignored_folders
+        .iter()
+        .any(|folder| root_key.starts_with(folder))
+        || exclude_directory(&root, exclude, &project_root)?
+    {
+        return Ok(());
+    }
+    let exclude = exclude.cloned();
+    let prune_excludes = exclude
+        .as_ref()
+        .is_some_and(|matcher| matcher.num_whitelists() == 0);
+    let filter_error = Arc::new(Mutex::new(None));
+    let reported_error = Arc::clone(&filter_error);
+    let mut builder = WalkBuilder::new(root);
+    builder
+        .standard_filters(false)
+        .hidden(false)
+        .parents(true)
+        .ignore(false)
+        .git_ignore(true)
+        .git_global(false)
+        .git_exclude(false)
+        .ignore_case_insensitive(cfg!(windows))
+        .require_git(false)
+        .follow_links(false);
+    builder.filter_entry(move |entry| {
+        #[cfg(windows)]
+        let is_link = match fs::symlink_metadata(entry.path()) {
+            Ok(metadata) => linked(&metadata),
+            Err(error) => {
+                if let Ok(mut slot) = reported_error.lock() {
+                    slot.get_or_insert(error);
+                }
+                return false;
+            }
+        };
+        #[cfg(not(windows))]
+        let is_link = entry
+            .file_type()
+            .is_some_and(|file_type| file_type.is_symlink());
+        if is_link {
+            return false;
+        }
+        if !entry
+            .file_type()
+            .is_some_and(|file_type| file_type.is_dir())
+        {
+            return true;
+        }
+        let key = match absolute_key(entry.path()) {
+            Ok(key) => key,
+            Err(error) => {
+                if let Ok(mut slot) = reported_error.lock() {
+                    slot.get_or_insert(error);
+                }
+                return false;
+            }
+        };
+        if ignored_folders.iter().any(|folder| key.starts_with(folder)) {
+            return false;
+        }
+        if prune_excludes && let Some(matcher) = &exclude {
+            let relative = match project_relative(entry.path(), &project_root) {
+                Ok(relative) => relative,
+                Err(error) => {
+                    if let Ok(mut slot) = reported_error.lock() {
+                        slot.get_or_insert(error);
+                    }
+                    return false;
+                }
+            };
+            if relative.is_some_and(|relative| {
+                matcher
+                    .matched_path_or_any_parents(relative, true)
+                    .is_ignore()
+            }) {
+                return false;
+            }
+        }
+        true
+    });
+    for entry in builder.build() {
+        let entry = entry.map_err(|error| io::Error::other(error.to_string()))?;
+        if let Some(error) = entry.error() {
+            return Err(io::Error::other(error.to_string()));
+        }
+        let Some(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_file() && Language::from_path(entry.path()).is_some() {
+            candidates.push(entry.path().to_path_buf());
+        }
+    }
+    if let Some(error) = filter_error
+        .lock()
+        .map_err(|_| io::Error::other("discovery filter lock was poisoned"))?
+        .take()
+    {
+        return Err(error);
     }
     Ok(())
 }
@@ -51,6 +179,121 @@ fn absolute_key(path: &Path) -> io::Result<PathBuf> {
     #[cfg(windows)]
     let absolute = PathBuf::from(absolute.to_string_lossy().to_lowercase());
     Ok(absolute)
+}
+
+fn normalized_absolute(path: &Path) -> io::Result<PathBuf> {
+    let absolute = std::path::absolute(path)?;
+    #[cfg(windows)]
+    let absolute = {
+        let value = absolute.to_string_lossy().replace('/', "\\");
+        let folded = value.to_ascii_lowercase();
+        if folded.starts_with("\\\\?\\unc\\") {
+            PathBuf::from(format!("\\\\{}", &value[8..]))
+        } else if folded.starts_with("\\\\?\\") {
+            PathBuf::from(&value[4..])
+        } else {
+            PathBuf::from(value)
+        }
+    };
+    let mut normalized = PathBuf::new();
+    for part in absolute.components() {
+        match part {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(part.as_os_str()),
+        }
+    }
+    Ok(normalized)
+}
+
+fn project_relative(path: &Path, root: &Path) -> io::Result<Option<PathBuf>> {
+    let path = normalized_absolute(path)?;
+    let root = normalized_absolute(root)?;
+    #[cfg(windows)]
+    {
+        fn key(part: Component<'_>) -> String {
+            use std::path::Prefix;
+            match part {
+                Component::Prefix(prefix) => match prefix.kind() {
+                    Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => {
+                        format!("disk:{}", char::from(drive).to_ascii_lowercase())
+                    }
+                    Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) => format!(
+                        "unc:{}\\{}",
+                        server.to_string_lossy().to_lowercase(),
+                        share.to_string_lossy().to_lowercase()
+                    ),
+                    Prefix::Verbatim(path) => {
+                        format!("verbatim:{}", path.to_string_lossy().to_lowercase())
+                    }
+                    Prefix::DeviceNS(path) => {
+                        format!("device:{}", path.to_string_lossy().to_lowercase())
+                    }
+                },
+                Component::RootDir => "root".into(),
+                Component::CurDir => ".".into(),
+                Component::ParentDir => "..".into(),
+                Component::Normal(name) => name.to_string_lossy().to_lowercase(),
+            }
+        }
+        let path_parts: Vec<_> = path.components().collect();
+        let root_parts: Vec<_> = root.components().collect();
+        if path_parts.len() < root_parts.len()
+            || !path_parts
+                .iter()
+                .zip(&root_parts)
+                .all(|(path, root)| key(*path) == key(*root))
+        {
+            return Ok(None);
+        }
+        let mut relative = PathBuf::new();
+        for part in path_parts.into_iter().skip(root_parts.len()) {
+            relative.push(part.as_os_str());
+        }
+        Ok(Some(relative))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(path.strip_prefix(root).ok().map(Path::to_path_buf))
+    }
+}
+
+fn exclude_directory(
+    path: &Path,
+    matcher: Option<&Arc<Gitignore>>,
+    project_root: &Path,
+) -> io::Result<bool> {
+    let Some(matcher) = matcher.filter(|matcher| matcher.num_whitelists() == 0) else {
+        return Ok(false);
+    };
+    let Some(relative) = project_relative(path, project_root)? else {
+        return Ok(false);
+    };
+    Ok(matcher
+        .matched_path_or_any_parents(relative, true)
+        .is_ignore())
+}
+
+fn exclusions(settings: &Settings) -> Result<Option<Gitignore>, String> {
+    if settings.exclude.is_empty() {
+        return Ok(None);
+    }
+    let root = normalized_absolute(&settings.project_root).map_err(|error| error.to_string())?;
+    let mut builder = GitignoreBuilder::new(root);
+    builder
+        .case_insensitive(cfg!(windows))
+        .map_err(|error| error.to_string())?;
+    for pattern in &settings.exclude {
+        builder
+            .add_line(None, pattern)
+            .map_err(|error| format!("Invalid exclude pattern {pattern:?}: {error}"))?;
+    }
+    builder
+        .build()
+        .map(Some)
+        .map_err(|error| format!("Invalid exclude pattern: {error}"))
 }
 
 pub fn discover(settings: &Settings) -> Result<Vec<PathBuf>, String> {
@@ -69,6 +312,7 @@ pub(crate) fn discover_unsorted(settings: &Settings) -> Result<Vec<PathBuf>, Str
         .map(|path| absolute_key(path))
         .collect::<io::Result<Vec<_>>>()
         .map_err(|error| error.to_string())?;
+    let exclude = exclusions(settings)?.map(Arc::new);
     let mut paths = HashMap::new();
     for path in &settings.paths {
         let metadata = fs::metadata(path)
@@ -81,7 +325,25 @@ pub(crate) fn discover_unsorted(settings: &Settings) -> Result<Vec<PathBuf>, Str
                     path.display()
                 ));
             }
-            walk(path, &mut candidates, &ignored_folders).map_err(|error| error.to_string())?;
+            if settings.respect_gitignore {
+                walk_gitignored(
+                    path,
+                    &mut candidates,
+                    &ignored_folders,
+                    exclude.as_ref(),
+                    &settings.project_root,
+                )
+                .map_err(|error| error.to_string())?;
+            } else {
+                walk(
+                    path,
+                    &mut candidates,
+                    &ignored_folders,
+                    exclude.as_ref(),
+                    &settings.project_root,
+                )
+                .map_err(|error| error.to_string())?;
+            }
         } else if metadata.is_file() {
             candidates.push(path.clone());
         } else {
@@ -92,12 +354,24 @@ pub(crate) fn discover_unsorted(settings: &Settings) -> Result<Vec<PathBuf>, Str
                 continue;
             }
             let key = absolute_key(&candidate).map_err(|error| error.to_string())?;
+            let excluded_by_pattern = if let Some(matcher) = &exclude {
+                project_relative(&candidate, &settings.project_root)
+                    .map_err(|error| error.to_string())?
+                    .is_some_and(|relative| {
+                        matcher
+                            .matched_path_or_any_parents(relative, false)
+                            .is_ignore()
+                    })
+            } else {
+                false
+            };
             if candidate.file_name().is_some_and(|name| {
                 settings
                     .ignore_files
                     .iter()
                     .any(|ignored| name == ignored.as_str())
             }) || ignored_folders.iter().any(|folder| key.starts_with(folder))
+                || excluded_by_pattern
             {
                 continue;
             }
@@ -386,6 +660,8 @@ mod tests {
             languages: vec![Language::Python],
             ignore_files: vec!["ignored.py".into()],
             ignore_folders: vec![root.join("skip")],
+            respect_gitignore: false,
+            exclude: Vec::new(),
             project_root: root.to_path_buf(),
             config_path: None,
         }
@@ -400,11 +676,13 @@ mod tests {
             "a.py",
             ".py",
             "other.txt",
+            "gitignored.py",
             "ignored.py",
             "skip/a.py",
         ] {
             fs::write(root.path().join(name), b"content").unwrap();
         }
+        fs::write(root.path().join(".gitignore"), "gitignored.py\n").unwrap();
         let mut settings = settings(root.path());
         settings.paths.push(root.path().join("./a.py"));
         #[cfg(unix)]
@@ -423,10 +701,123 @@ mod tests {
             vec![
                 root.path().join(".py"),
                 root.path().join("a.py"),
+                root.path().join("gitignored.py"),
                 root.path().join("z.py")
             ]
         );
         settings.ignore_folders.push(root.path().to_path_buf());
+        assert!(discover(&settings).unwrap().is_empty());
+    }
+
+    #[test]
+    fn gitignore_respects_nested_rules_and_explicit_file_selection() {
+        let root = tempfile::tempdir().unwrap();
+        let nested = root.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        fs::write(root.path().join(".gitignore"), "*.py\n!.hidden.py\n").unwrap();
+        fs::write(nested.join(".gitignore"), "!keep.py\n").unwrap();
+        for name in ["ignored.py", ".hidden.py"] {
+            fs::write(root.path().join(name), b"source").unwrap();
+        }
+        for name in ["ignored.py", "keep.py"] {
+            fs::write(nested.join(name), b"source").unwrap();
+        }
+
+        let mut settings = settings(root.path());
+        settings.ignore_files.clear();
+        settings.ignore_folders.clear();
+        settings.respect_gitignore = true;
+        assert_eq!(
+            discover(&settings).unwrap(),
+            vec![root.path().join(".hidden.py"), nested.join("keep.py")]
+        );
+
+        settings.paths = vec![root.path().join("ignored.py")];
+        assert_eq!(
+            discover(&settings).unwrap(),
+            vec![root.path().join("ignored.py")]
+        );
+        settings.ignore_files.push("ignored.py".into());
+        assert!(discover(&settings).unwrap().is_empty());
+
+        settings.paths = vec![root.path().to_path_buf()];
+        fs::write(root.path().join(".gitignore"), "[z-a]\n").unwrap();
+        assert!(discover(&settings).is_err());
+    }
+
+    #[test]
+    fn project_relative_excludes_apply_to_explicit_files_and_reject_bad_patterns() {
+        let root = tempfile::tempdir().unwrap();
+        let generated = root.path().join("generated");
+        let comma_folder = root.path().join("with,comma");
+        let legacy_folder = root.path().join("legacy-skipped");
+        fs::create_dir(&generated).unwrap();
+        fs::create_dir(&comma_folder).unwrap();
+        fs::create_dir(&legacy_folder).unwrap();
+        for path in [
+            generated.join("file.py"),
+            generated.join("keep.py"),
+            comma_folder.join("file.py"),
+            root.path().join("keep.py"),
+        ] {
+            fs::write(&path, b"source").unwrap();
+        }
+        fs::write(legacy_folder.join(".gitignore"), "[z-a]\n").unwrap();
+        fs::write(legacy_folder.join("inside.py"), b"source").unwrap();
+
+        let mut settings = settings(root.path());
+        settings.ignore_files.clear();
+        settings.ignore_folders.clear();
+        settings.ignore_folders.push(legacy_folder.clone());
+        settings.exclude = vec![
+            "/generated/".into(),
+            "!/generated/keep.py".into(),
+            "/with,comma/".into(),
+        ];
+        assert_eq!(
+            discover(&settings).unwrap(),
+            vec![generated.join("keep.py"), root.path().join("keep.py")]
+        );
+        settings.exclude = vec!["/generated/".into(), "/with,comma/".into()];
+        settings.respect_gitignore = true;
+        fs::write(generated.join(".gitignore"), "[z-a]\n").unwrap();
+        assert_eq!(
+            discover(&settings).unwrap(),
+            vec![root.path().join("keep.py")]
+        );
+        settings.paths = vec![generated.clone()];
+        assert!(discover(&settings).unwrap().is_empty());
+        settings.paths = vec![legacy_folder.clone()];
+        assert!(discover(&settings).unwrap().is_empty());
+        settings.paths = vec![generated.join("file.py")];
+        assert!(discover(&settings).unwrap().is_empty());
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("outside.py"), b"source").unwrap();
+        settings.paths = vec![outside.path().join("outside.py")];
+        assert_eq!(
+            discover(&settings).unwrap(),
+            vec![outside.path().join("outside.py")]
+        );
+        settings.exclude = vec!["[z-a]".into()];
+        assert!(discover(&settings).unwrap_err().contains("exclude pattern"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn exclusions_match_case_insensitively_across_windows_path_prefixes() {
+        let root = tempfile::tempdir().unwrap();
+        let generated = root.path().join("generated");
+        fs::create_dir(&generated).unwrap();
+        fs::write(generated.join("file.py"), b"source").unwrap();
+
+        let mut settings = settings(root.path());
+        settings.ignore_files.clear();
+        settings.ignore_folders.clear();
+        settings.project_root = fs::canonicalize(root.path()).unwrap();
+        settings.paths = vec![
+            PathBuf::from(root.path().to_string_lossy().to_lowercase()).join("generated/file.py"),
+        ];
+        settings.exclude = vec!["/GENERATED/".into()];
         assert!(discover(&settings).unwrap().is_empty());
     }
 

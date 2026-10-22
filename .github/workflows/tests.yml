@@ -76,6 +76,44 @@ jobs:
           write(".action-test/success/stale.py", "François-Guillaume Fernandez")
           write(".action-test/mixed/safe.py", "François-Guillaume Fernandez")
           write(".action-test/mixed/bad.py", "Another Owner")
+          selection = Path(".action-test/selection")
+          (selection / "generated").mkdir(parents=True, exist_ok=True)
+          (selection / "with,comma").mkdir(parents=True, exist_ok=True)
+          (selection / ".gitignore").write_text("ignored.py\n", encoding="utf-8")
+          for name in ["ignored.py", "generated/out.py", "with,comma/out.py"]:
+              (selection / name).write_text("value = 1\n", encoding="utf-8")
+          (selection / "keep.py").write_text("value = 1\n", encoding="utf-8")
+          PY
+      - name: Apply .gitignore and repeated exclusion inputs
+        id: selection
+        continue-on-error: true
+        uses: ./
+        with:
+          version: source
+          mode: check
+          license: 'Apache-2.0'
+          owner: 'François-Guillaume Fernandez'
+          starting-year: 2022
+          folders: '.action-test/selection'
+          ignore-files: ''
+          ignore-folders: ''
+          respect-gitignore: true
+          exclude: |
+            /.action-test/selection/generated/
+            /.action-test/selection/with,comma/
+      - name: Verify selection filters
+        env:
+          ISSUES: ${{ steps.selection.outputs.issues }}
+          OUTCOME: ${{ steps.selection.outcome }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          if os.environ["OUTCOME"] != "failure":
+              raise SystemExit(f"Expected one remaining header issue, got {os.environ['OUTCOME']}")
+          if json.loads(os.environ["ISSUES"]) != [".action-test/selection/keep.py"]:
+              raise SystemExit(f"Selection filters missed files: {os.environ['ISSUES']}")
           PY
       - name: Fix a stale header
         id: fix

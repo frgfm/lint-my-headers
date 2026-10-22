@@ -305,7 +305,7 @@ fn write_action_outputs(result: &CommandResult) -> io::Result<()> {
     )
 }
 
-fn render(result: &CommandResult, format: OutputFormat) -> io::Result<()> {
+fn render(result: &CommandResult, format: OutputFormat, languages: Option<&str>) -> io::Result<()> {
     let mut stdout = io::stdout().lock();
     if format == OutputFormat::Json {
         serde_json::to_writer(&mut stdout, result)?;
@@ -325,6 +325,18 @@ fn render(result: &CommandResult, format: OutputFormat) -> io::Result<()> {
             .map(|p| format!(" ({p})"))
             .unwrap_or_default();
         writeln!(stderr, "error: {}{path}", error.message)?;
+    }
+    if result.error.is_none() {
+        let noun = if result.checked == 1 { "file" } else { "files" };
+        writeln!(stderr, "Checked {} {noun}.", result.checked)?;
+        if result.checked == 0
+            && let Some(languages) = languages
+        {
+            writeln!(
+                stderr,
+                "warning: no files matched the selected paths and filters. Enabled languages: {languages}. Set languages or --languages to include your source types; the default is Python."
+            )?;
+        }
     }
     for diagnostic in &result.diagnostics {
         let suffix = if diagnostic.fixable { " [fixable]" } else { "" };
@@ -355,8 +367,17 @@ pub fn main_entry() -> i32 {
         .config
         .as_ref()
         .map(|p| display_path(p, &std::env::current_dir().unwrap_or_default()));
+    let mut languages = None;
     let mut result = match config::resolve(options) {
         Ok(settings) => {
+            languages = Some(
+                settings
+                    .languages
+                    .iter()
+                    .map(|language| format!("{language:?}").to_ascii_lowercase())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
             let mut result = run(&settings, args.command.name(), chrono::Local::now().year());
             if result.expected_header.is_none() && result.error.is_some() {
                 result.config_path = explicit_config.clone();
@@ -386,7 +407,7 @@ pub fn main_entry() -> i32 {
             None,
         );
     }
-    if let Err(error) = render(&result, options.output_format) {
+    if let Err(error) = render(&result, options.output_format, languages.as_deref()) {
         if error.kind() != io::ErrorKind::BrokenPipe {
             eprintln!("error: {error}");
         }
