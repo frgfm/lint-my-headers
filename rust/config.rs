@@ -170,31 +170,29 @@ fn config_table(path: &Path) -> Result<Option<Table>, String> {
                 .as_integer()
                 .is_none_or(|v| !(1000..=9999).contains(&v))
                 .then_some("expected a four-digit integer"),
-            "paths" | "languages" | "ignore-files" | "ignore-folders" => {
-                match value.as_array() {
-                    Some(items)
-                        if items
-                            .iter()
-                            .all(|v| v.as_str().is_some_and(|s| !s.is_empty())) =>
+            "paths" | "languages" | "ignore-files" | "ignore-folders" => match value.as_array() {
+                Some(items)
+                    if items
+                        .iter()
+                        .all(|v| v.as_str().is_some_and(|s| !s.is_empty())) =>
+                {
+                    if matches!(key.as_str(), "paths" | "languages") && items.is_empty() {
+                        Some("expected at least one value")
+                    } else if key == "languages"
+                        && items.iter().any(|v| {
+                            Language::from_str(v.as_str().expect("validated string"), false)
+                                .is_err()
+                        })
                     {
-                        if matches!(key.as_str(), "paths" | "languages") && items.is_empty() {
-                            Some("expected at least one value")
-                        } else if key == "languages"
-                            && items.iter().any(|v| {
-                                Language::from_str(v.as_str().expect("validated string"), false)
-                                    .is_err()
-                            })
-                        {
-                            Some(
-                                "expected python, javascript, typescript, rust, go, swift, bash (alias shell), c, or cpp (alias c++)",
-                            )
-                        } else {
-                            None
-                        }
+                        Some(
+                            "expected python, javascript, typescript, rust, go, swift, bash (alias shell), c, or cpp (alias c++)",
+                        )
+                    } else {
+                        None
                     }
-                    _ => Some("expected an array of non-empty strings"),
                 }
-            }
+                _ => Some("expected an array of non-empty strings"),
+            },
             "respect-gitignore" => value.as_bool().is_none().then_some("expected a boolean"),
             _ => Some("unknown key"),
         };

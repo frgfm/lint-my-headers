@@ -134,8 +134,13 @@ pub(crate) fn discover_unsorted(settings: &Settings) -> Result<Vec<PathBuf>, Str
                     path.display()
                 ));
             }
-            walk(path, &mut candidates, &ignored_folders, settings.respect_gitignore)
-                .map_err(|error| error.to_string())?;
+            walk(
+                path,
+                &mut candidates,
+                &ignored_folders,
+                settings.respect_gitignore,
+            )
+            .map_err(|error| error.to_string())?;
         } else if metadata.is_file() {
             candidates.push(path.clone());
         } else {

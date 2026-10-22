@@ -1000,22 +1000,18 @@ fn gitignore_selects_directory_and_explicit_paths() {
         format!("{CONFIG}respect-gitignore = true\n"),
     );
     write(root, ".gitignore", "ignored.py\n");
-    for name in [
-        "ignored.py",
-        "keep.py",
-        "generated/out.py",
-    ] {
+    for name in ["ignored.py", "keep.py", "generated/out.py"] {
         write(root, &format!("src/{name}"), header(year()));
     }
 
     let result = json_run(root, &["check"], 0);
-    assert_eq!(result["checked"], 1);
+    assert_eq!(result["checked"], 2);
 
     let explicit = json_run(root, &["check", "src/ignored.py"], 0);
     assert_eq!(explicit["checked"], 1);
 
     let no_gitignore = json_run(root, &["check", "--respect-gitignore=false"], 0);
-    assert_eq!(no_gitignore["checked"], 2);
+    assert_eq!(no_gitignore["checked"], 3);
 
     write(root, ".gitignore", "[z-a]\n");
     let malformed_ignore = json_run(root, &["check"], 2);
