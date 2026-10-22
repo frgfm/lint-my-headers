@@ -1796,9 +1796,12 @@ fn fix_diff_previews_exact_repairs_without_writing() {
     };
     write(root, cp1252_name, &cp1252);
 
-    let bom = format!("\u{feff}{}", source(format!("{first}-{stale_end}"), owner, NOTICE))
-        .replace('\n', "\r\n")
-        .into_bytes();
+    let bom = format!(
+        "\u{feff}{}",
+        source(format!("{first}-{stale_end}"), owner, NOTICE)
+    )
+    .replace('\n', "\r\n")
+    .into_bytes();
     write(root, "src/bom.py", &bom);
     let wrong_owner = source(format!("{first}-{stale_end}"), "Other Owner", NOTICE);
     write(root, "src/wrong.py", &wrong_owner);
@@ -1808,7 +1811,11 @@ fn fix_diff_previews_exact_repairs_without_writing() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(root.join("src/latin1.py"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(
+            root.join("src/latin1.py"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
     }
     let before = [
         ("src/latin1.py", latin1),
@@ -1832,7 +1839,14 @@ fn fix_diff_previews_exact_repairs_without_writing() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        assert_eq!(fs::metadata(root.join("src/latin1.py")).unwrap().permissions().mode() & 0o777, 0o755);
+        assert_eq!(
+            fs::metadata(root.join("src/latin1.py"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
     }
 
     let clean = source(year(), owner, NOTICE);
@@ -1843,7 +1857,11 @@ fn fix_diff_previews_exact_repairs_without_writing() {
     #[cfg(unix)]
     {
         let expected_dir = workspace();
-        write(expected_dir.path(), "pyproject.toml", CONFIG.replace(OWNER, owner));
+        write(
+            expected_dir.path(),
+            "pyproject.toml",
+            CONFIG.replace(OWNER, owner),
+        );
         for (name, bytes) in &before {
             write(expected_dir.path(), name, bytes);
         }
