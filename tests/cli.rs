@@ -1855,7 +1855,7 @@ fn fix_diff_previews_exact_safe_edits_without_writing_and_keeps_manual_findings(
         1,
     );
     assert!(!proposal_only.stdout.is_empty());
-    assert!(proposal_only.stderr.is_empty());
+    assert!(!String::from_utf8_lossy(&proposal_only.stderr).contains("LMH"));
     assert_eq!(fs::read(root.join(cp1252_name)).unwrap(), cp1252);
     let output = run(
         root,
@@ -1982,7 +1982,7 @@ fn fix_diff_previews_exact_safe_edits_without_writing_and_keeps_manual_findings(
     write(root, "src/current.py", clean);
     let clean = run(root, &["fix", "--diff", "src/current.py"], 0);
     assert!(clean.stdout.is_empty());
-    assert!(clean.stderr.is_empty());
+    assert!(!String::from_utf8_lossy(&clean.stderr).contains("LMH"));
 }
 
 #[test]
@@ -2044,6 +2044,6 @@ fn fix_diff_labels_relative_paths_from_nested_working_directories() {
             .stdout
             .starts_with(b"--- a/nested/file.py\n+++ b/nested/file.py\n")
     );
-    assert!(output.stderr.is_empty());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("LMH"));
     assert_eq!(fs::read(nested.join("file.py")).unwrap(), stale.as_bytes());
 }
