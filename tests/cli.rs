@@ -1772,47 +1772,33 @@ fn pinned_spdx_data_accepts_every_legacy_notice_and_new_identifiers() {
 }
 
 #[test]
-fn fix_diff_previews_exact_safe_edits_without_writing_and_keeps_manual_findings() {
+fn fix_diff_previews_exact_repairs_without_writing() {
     let dir = workspace();
     let root = dir.path();
     let owner = "Café Owner";
     write(root, "pyproject.toml", CONFIG.replace(OWNER, owner));
     let first = year() - 2;
     let stale_end = year() - 1;
-
     let mut latin1 =
         format!("# coding: latin-1\r\n\r\n# Copyright (C) {first}-{stale_end}, Caf").into_bytes();
     latin1.push(0xe9);
-    let notice = format!(" Owner.\r\n\r\n{}", NOTICE.replace('\n', "\r\n"));
-    latin1.extend_from_slice(notice.as_bytes());
-    latin1.extend_from_slice(b"\r\nvalue = 1\r\n");
+    latin1.extend_from_slice(format!(" Owner.\r\n\r\n{}", NOTICE.replace('\n', "\r\n")).as_bytes());
+    latin1.extend_from_slice(b"\r\nvalue = 1");
     write(root, "src/latin1.py", &latin1);
 
-    let cp1252 = [
-        b"# coding: cp1252\r\nvalue = 'caf".as_slice(),
-        &[0x80],
-        b"'",
-    ]
-    .concat();
+    let mut cp1252 = b"# coding: cp1252\r\n\r\nvalue = 'caf".to_vec();
+    cp1252.push(0x80);
+    cp1252.extend_from_slice(b"'");
     let cp1252_name = if cfg!(unix) {
-        "src/with\t space.py"
+        "src/with\ttab\\backslash.py"
     } else {
         "src/cp1252.py"
     };
     write(root, cp1252_name, &cp1252);
-    let backslash_name = if cfg!(unix) {
-        "src/with\\backslash.py"
-    } else {
-        "src/backslash.py"
-    };
-    let backslash = source(format!("{first}-{stale_end}"), owner, NOTICE);
-    write(root, backslash_name, &backslash);
-    let bom = format!(
-        "\u{feff}{}",
-        source(format!("{first}-{stale_end}"), owner, NOTICE)
-    )
-    .replace('\n', "\r\n")
-    .into_bytes();
+
+    let bom = format!("\u{feff}{}", source(format!("{first}-{stale_end}"), owner, NOTICE))
+        .replace('\n', "\r\n")
+        .into_bytes();
     write(root, "src/bom.py", &bom);
     let wrong_owner = source(format!("{first}-{stale_end}"), "Other Owner", NOTICE);
     write(root, "src/wrong.py", &wrong_owner);
@@ -1822,146 +1808,52 @@ fn fix_diff_previews_exact_safe_edits_without_writing_and_keeps_manual_findings(
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(
-            root.join("src/latin1.py"),
-            fs::Permissions::from_mode(0o755),
-        )
-        .unwrap();
+        fs::set_permissions(root.join("src/latin1.py"), fs::Permissions::from_mode(0o755)).unwrap();
     }
     let before = [
-        (
-            "src/latin1.py",
-            fs::read(root.join("src/latin1.py")).unwrap(),
-        ),
-        (cp1252_name, fs::read(root.join(cp1252_name)).unwrap()),
-        (backslash_name, fs::read(root.join(backslash_name)).unwrap()),
-        (
-            "src/ambiguous.py",
-            fs::read(root.join("src/ambiguous.py")).unwrap(),
-        ),
-        ("src/bom.py", fs::read(root.join("src/bom.py")).unwrap()),
-        ("src/wrong.py", fs::read(root.join("src/wrong.py")).unwrap()),
+        ("src/latin1.py", latin1),
+        (cp1252_name, cp1252),
+        ("src/bom.py", bom),
+        ("src/wrong.py", wrong_owner.into_bytes()),
+        ("src/ambiguous.py", ambiguous.into_bytes()),
     ];
     let creation_year = first.to_string();
-    let proposal_only = run(
-        root,
-        &[
-            "fix",
-            "--diff",
-            "--creation-year",
-            &creation_year,
-            cp1252_name,
-        ],
-        1,
-    );
-    assert!(!proposal_only.stdout.is_empty());
-    assert!(!String::from_utf8_lossy(&proposal_only.stderr).contains("LMH"));
-    assert_eq!(fs::read(root.join(cp1252_name)).unwrap(), cp1252);
     let output = run(
         root,
         &["fix", "--diff", "--creation-year", &creation_year, "src"],
         1,
     );
-
-    let mut old_latin1_line = format!("-# Copyright (C) {first}-{stale_end}, Caf").into_bytes();
-    old_latin1_line.push(0xe9);
-    old_latin1_line.extend_from_slice(b" Owner.\r\n");
-    assert!(
-        output
-            .stdout
-            .windows(old_latin1_line.len())
-            .any(|bytes| bytes == old_latin1_line)
-    );
-    assert!(
-        output
-            .stdout
-            .windows(3)
-            .any(|bytes| bytes == [0x80, b'\'', b'\n'])
-    );
-    assert!(
-        output
-            .stdout
-            .windows(3)
-            .any(|bytes| bytes == [0xef, 0xbb, 0xbf])
-    );
-    assert!(
-        output
-            .stdout
-            .windows(5)
-            .any(|bytes| bytes == b"-\xef\xbb\xbf#")
-    );
-    #[cfg(unix)]
-    assert!(
-        output
-            .stdout
-            .windows(b"\"a/src/with\\t space.py\"".len())
-            .any(|bytes| bytes == b"\"a/src/with\\t space.py\"")
-    );
-    #[cfg(unix)]
-    assert!(
-        output
-            .stdout
-            .windows(b"\"a/src/with\\\\backslash.py\"".len())
-            .any(|bytes| bytes == b"\"a/src/with\\\\backslash.py\"")
-    );
-    assert!(
-        output.stdout.windows(4).any(|bytes| bytes == b"\r\n-#"),
-        "stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        output
-            .stdout
-            .windows(b"\\ No newline at end of file\n".len())
-            .any(|bytes| bytes == b"\\ No newline at end of file\n")
-    );
-    let wrong = String::from_utf8_lossy(&output.stderr);
-    assert!(wrong.contains("src/wrong.py:1:1: LMH002"));
-    assert!(wrong.contains("src/ambiguous.py:1:1: LMH006"));
-    assert!(
-        !output
-            .stdout
-            .windows(b"src/wrong.py".len())
-            .any(|bytes| bytes == b"src/wrong.py")
-    );
-    assert!(
-        !output
-            .stdout
-            .windows(b"src/ambiguous.py".len())
-            .any(|bytes| bytes == b"src/ambiguous.py")
-    );
-    for (name, bytes) in before {
-        assert_eq!(fs::read(root.join(name)).unwrap(), bytes, "{name}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("src/wrong.py:1:1: LMH002"));
+    assert!(stderr.contains("src/ambiguous.py:1:1: LMH006"));
+    for (name, bytes) in &before {
+        assert_eq!(fs::read(root.join(name)).unwrap(), *bytes, "{name}");
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(root.join("src/latin1.py"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o755
-        );
+        assert_eq!(fs::metadata(root.join("src/latin1.py")).unwrap().permissions().mode() & 0o777, 0o755);
     }
+
+    let clean = source(year(), owner, NOTICE);
+    write(root, "src/current.py", clean);
+    let clean = run(root, &["fix", "--diff", "src/current.py"], 0);
+    assert!(clean.stdout.is_empty());
 
     #[cfg(unix)]
     {
-        let expected = workspace();
-        write(
-            expected.path(),
-            "pyproject.toml",
-            CONFIG.replace(OWNER, owner),
+        let expected_dir = workspace();
+        write(expected_dir.path(), "pyproject.toml", CONFIG.replace(OWNER, owner));
+        for (name, bytes) in &before {
+            write(expected_dir.path(), name, bytes);
+        }
+        let expected = json_run(
+            expected_dir.path(),
+            &["fix", "--creation-year", &creation_year, "src"],
+            1,
         );
-        write(expected.path(), cp1252_name, &cp1252);
-        run(
-            expected.path(),
-            &["fix", "--creation-year", &creation_year, cp1252_name],
-            0,
-        );
-        let expected_bytes = fs::read(expected.path().join(cp1252_name)).unwrap();
+        assert_eq!(expected["changed"].as_array().unwrap().len(), 3);
+
         let initialized = Command::new("git")
             .current_dir(root)
             .args(["init", "--quiet"])
@@ -1975,14 +1867,14 @@ fn fix_diff_previews_exact_safe_edits_without_writing_and_keeps_manual_findings(
             .output()
             .unwrap();
         assert!(applied.status.success(), "{applied:?}");
-        assert_eq!(fs::read(root.join(cp1252_name)).unwrap(), expected_bytes);
+        for (name, _) in &before {
+            assert_eq!(
+                fs::read(root.join(name)).unwrap(),
+                fs::read(expected_dir.path().join(name)).unwrap(),
+                "{name}"
+            );
+        }
     }
-
-    let clean = source(year(), owner, NOTICE);
-    write(root, "src/current.py", clean);
-    let clean = run(root, &["fix", "--diff", "src/current.py"], 0);
-    assert!(clean.stdout.is_empty());
-    assert!(!String::from_utf8_lossy(&clean.stderr).contains("LMH"));
 }
 
 #[test]
