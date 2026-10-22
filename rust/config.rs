@@ -78,12 +78,6 @@ pub struct Options {
         help = "Apply .gitignore rules to directory scans; use =false to override"
     )]
     pub respect_gitignore: Option<bool>,
-    #[arg(
-        long,
-        action = clap::ArgAction::Append,
-        help = "Project-relative gitignore-style exclusion pattern; repeat as needed"
-    )]
-    pub exclude: Option<Vec<String>>,
     #[arg(long, value_enum, default_value = "text")]
     pub output_format: OutputFormat,
     /// Explicit files or folders; overrides configured paths.
@@ -176,7 +170,7 @@ fn config_table(path: &Path) -> Result<Option<Table>, String> {
                 .as_integer()
                 .is_none_or(|v| !(1000..=9999).contains(&v))
                 .then_some("expected a four-digit integer"),
-            "paths" | "languages" | "ignore-files" | "ignore-folders" | "exclude" => {
+            "paths" | "languages" | "ignore-files" | "ignore-folders" => {
                 match value.as_array() {
                     Some(items)
                         if items
@@ -314,10 +308,6 @@ pub fn resolve(options: &Options) -> Result<Settings, String> {
             .and_then(Value::as_bool)
             .unwrap_or(false)
     });
-    let exclude = options
-        .exclude
-        .clone()
-        .unwrap_or_else(|| strings(&table, "exclude", &[]));
     Ok(Settings {
         owner,
         year,
@@ -340,7 +330,6 @@ pub fn resolve(options: &Options) -> Result<Settings, String> {
         ignore_files,
         ignore_folders,
         respect_gitignore,
-        exclude,
         project_root: root,
         config_path,
     })

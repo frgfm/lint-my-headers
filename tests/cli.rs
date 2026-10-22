@@ -991,22 +991,19 @@ fn zero_file_text_summary_names_languages_and_json_stays_quiet() {
 }
 
 #[test]
-fn gitignore_and_repeatable_exclusions_select_directory_and_explicit_paths() {
+fn gitignore_selects_directory_and_explicit_paths() {
     let dir = workspace();
     let root = dir.path();
     write(
         root,
         "pyproject.toml",
-        format!(
-            "{CONFIG}respect-gitignore = true\nexclude = ['/src/generated/', '/src/with,comma/']\n"
-        ),
+        format!("{CONFIG}respect-gitignore = true\n"),
     );
     write(root, ".gitignore", "ignored.py\n");
     for name in [
         "ignored.py",
         "keep.py",
         "generated/out.py",
-        "with,comma/out.py",
     ] {
         write(root, &format!("src/{name}"), header(year()));
     }
@@ -1020,20 +1017,9 @@ fn gitignore_and_repeatable_exclusions_select_directory_and_explicit_paths() {
     let no_gitignore = json_run(root, &["check", "--respect-gitignore=false"], 0);
     assert_eq!(no_gitignore["checked"], 2);
 
-    let comma_pattern = json_run(root, &["check", "--exclude", "/src/with,comma/"], 0);
-    assert_eq!(comma_pattern["checked"], 2);
-
     write(root, ".gitignore", "[z-a]\n");
     let malformed_ignore = json_run(root, &["check"], 2);
     assert_eq!(malformed_ignore["error"]["code"], "LMH900");
-
-    write(
-        root,
-        "pyproject.toml",
-        format!("{CONFIG}exclude = ['[z-a]']\n"),
-    );
-    let malformed_pattern = json_run(root, &["check"], 2);
-    assert_eq!(malformed_pattern["error"]["code"], "LMH900");
 }
 
 #[test]
@@ -1351,7 +1337,6 @@ fn invalid_config_is_rejected_before_any_write() {
         ("languages", "'typescript'"),
         ("ignore-files", "[42]"),
         ("ignore-folders", "true"),
-        ("exclude", "[42]"),
         ("respect-gitignore", "'yes'"),
         ("unknown-key", "true"),
     ] {

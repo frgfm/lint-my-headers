@@ -58,39 +58,20 @@ SwiftPM/Xcode projects, and shell or C/C++ projects can use `.lmh.toml`;
 | `languages` / `--languages` | Non-empty language allowlist; default `["python"]`. |
 | `ignore-files` / `--ignore-files` | Exact excluded basenames; default `["__init__.py"]`. |
 | `ignore-folders` / `--ignore-folders` | Excluded subtrees; default `[".github"]`. |
-| `exclude` / `--exclude` | Gitignore-style exclusion patterns relative to the policy root; default `[]`. |
 | `respect-gitignore` / `--respect-gitignore` | Apply `.gitignore` rules during directory scans; default `false`. |
 
 !!! info "Unreleased selection options"
 
-    `exclude`, `respect-gitignore`, and text scan summaries are available from this source checkout. They are not in published version 0.8.0.
+    `respect-gitignore` and text scan summaries are available from this source checkout. They are not in published version 0.8.0.
 
 Select files with the same actual creation year when inserting headers. Run
 separately for each year; one shared `creation-year` does not describe mixed-age files.
 
-Configuration lists are arrays. CLI language and legacy ignore lists are
-comma-separated. `--exclude` accepts one pattern and can be repeated to replace
-the configured patterns:
+Configuration lists are arrays. CLI language and ignore lists are comma-separated:
 
 ```shell
 lmh check --languages typescript,rust --ignore-folders node_modules,target
-lmh check --exclude '/src/generated/' --exclude '**/*.min.js'
 ```
-
-The existing `ignore-files` and `ignore-folders` options and the new `exclude`
-patterns apply to explicit inputs and directory scans. `exclude` uses
-gitignore-style patterns relative to the policy root. For example:
-
-```toml
-exclude = ["/src/generated/", "**/*.min.js", "/target/"]
-```
-
-The patterns match files below the policy root. Paths outside that root do not
-match. Patterns are case-sensitive except on Windows, where they follow the
-filesystem's case-insensitive path matching. A `!` pattern can re-include a
-prior match. When any re-inclusion pattern is present, LMH keeps traversing
-directories so it can apply the ordered rules to files below them. Invalid
-patterns fail the command.
 
 Set `respect-gitignore = true` to apply `.gitignore` rules during directory scans.
 Nested `.gitignore` files and negation rules follow gitignore matching rules.
@@ -99,8 +80,8 @@ repository; it does not read `.ignore`, global Git excludes, or
 `.git/info/exclude`. LMH does not inspect the Git index, so the same matching
 rules skip tracked and untracked files. A directory path is walked with
 `.gitignore` rules applied to discovered entries. An explicitly named file is
-read directly and bypasses `.gitignore`; `ignore-files`, `ignore-folders`, and
-`exclude` still apply.
+read directly and bypasses `.gitignore`; `ignore-files` and `ignore-folders`
+still apply.
 
 In text mode, LMH reports the checked file count. A zero-file scan warns that no
 files matched the selected paths, filters, and languages. It shows the enabled

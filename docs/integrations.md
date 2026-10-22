@@ -115,7 +115,6 @@ Configure `languages` in the repository's policy for multilingual checks.
 | `folders` | Override configured source paths. |
 | `ignore-files`, `ignore-folders` | Override exclusions with comma-separated lists. |
 | `respect-gitignore` | Apply `.gitignore` rules during directory scans; `true` or `false`. |
-| `exclude` | Override project-relative exclusion patterns with newline-separated values. |
 
 Policy inputs default to `__from_config__`. See
 [action.yml](https://github.com/frgfm/lint-my-headers/blob/main/action.yml) for the

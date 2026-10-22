@@ -202,11 +202,10 @@ languages = ["python", "typescript", "rust"]
 
 The default is Python. Configured paths are relative to the policy file; explicit CLI
 paths are relative to the invocation directory. Unsupported extensions are skipped.
-Exclude generated, dependency, and build folders with `ignore-folders` or the
-project-relative `exclude` patterns. Set `respect-gitignore = true` to apply
-`.gitignore` rules during directory scans. These two options are available from
-the source checkout and are not in published version 0.8.0. Explicitly named
-files bypass `.gitignore`; configured exclusions still apply.
+Exclude generated, dependency, and build folders with `ignore-folders`. Set
+`respect-gitignore = true` to apply `.gitignore` rules during directory scans.
+This option is available from the source checkout and is not in published
+version 0.8.0. Explicitly named files bypass `.gitignore`.
 
 Existing-header repairs require one recognized stale year for the configured owner. Ambiguous layouts,
 wrong owners, future years, unsupported encodings, symlinks/reparse points, multiple hard
