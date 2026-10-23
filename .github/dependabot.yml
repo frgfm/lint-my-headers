@@ -1,47 +1,47 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     groups:
       actions:
+        patterns:
+          - "*"
+      security:
+        applies-to: "security-updates"
         patterns:
           - "*"
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "daily"
-    allow:
-      - dependency-name: "ruff"
-      - dependency-name: "ty"
-      - dependency-name: "prek"
-      - dependency-name: "uv"
-      - dependency-name: "maturin"
+    # Ignore routine docs bumps, while keeping security fixes eligible.
+    ignore:
       - dependency-name: "zensical"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     groups:
-      quality:
+      tools:
         patterns:
           - "ruff"
           - "ty"
           - "prek"
-      build:
-        patterns:
           - "uv"
           - "maturin"
-      docs:
+      security:
+        applies-to: "security-updates"
         patterns:
-          - "zensical"
+          - "*"
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily"
+    open-pull-requests-limit: 0
     groups:
-      rust:
+      security:
+        applies-to: "security-updates"
         patterns:
           - "*"
