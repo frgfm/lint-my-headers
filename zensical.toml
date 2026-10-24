@@ -10,6 +10,7 @@ nav = [
   { "Overview" = "index.md" },
   { "Compare header tools" = "comparison.md" },
   { "Getting started" = "getting-started.md" },
+  { "Migrate from addlicense" = "migrating-from-addlicense.md" },
   { "Configuration" = "configuration.md" },
   { "Integrations" = "integrations.md" },
   { "Diagnostics & agents" = "diagnostics.md" },
