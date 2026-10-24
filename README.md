@@ -144,6 +144,9 @@ lmh check
 git diff
 ```
 
+Development builds also support `lmh fix --diff` to preview repairs without
+writing source files. See [the repair guide](docs/getting-started.md#refresh-a-stale-year).
+
 A 2026 refresh produces a diff like this:
 
 ```diff

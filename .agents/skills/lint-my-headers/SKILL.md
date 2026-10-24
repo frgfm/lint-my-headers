@@ -72,6 +72,8 @@ lmh fix --output-format json [PATH...]
 
 Version 0.8.0 updates recognized stale years and can also insert missing headers when the owner, notice, and `creation-year` are explicitly declared and the diagnostic is fixable. Never substitute the policy's earliest accepted `starting-year` for a file's creation year. Existing legal text, malformed, ambiguous, future-dated, wrong-owner, wrong-license, symlinked, reparse-point, and multi-link targets stay unresolved.
 
+On an unreleased development build that lists `--diff` in `lmh fix --help`, run `lmh fix --diff [PATH...]` to preview eligible repairs. It prints unified diffs to stdout without writing files. Exit code `1` can mean proposals, unresolved findings, or both. This option is available only with text output and `fix`.
+
 After `fix`:
 
 1. Read `changed` and `diagnostics` from JSON.

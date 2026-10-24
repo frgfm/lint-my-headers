@@ -367,7 +367,11 @@ impl From<io::Error> for RepairError {
     }
 }
 
-fn matches(path: &Path, original: &Snapshot, project_root: &Path) -> io::Result<bool> {
+pub(crate) fn is_current(
+    path: &Path,
+    original: &Snapshot,
+    project_root: &Path,
+) -> io::Result<bool> {
     let current = read(path, project_root)?;
     Ok(current
         .identity
@@ -398,7 +402,7 @@ pub fn replace(
                 .unwrap_or_else(|| "repair target is unsafe".into()),
         )
     })?;
-    if !matches(path, original, project_root)? {
+    if !is_current(path, original, project_root)? {
         return Err(RepairError::Unsafe(
             "repair target changed before writing".into(),
         ));
@@ -418,7 +422,7 @@ pub fn replace(
         .as_file()
         .set_permissions(identity.permissions.clone())?;
     temporary.as_file().sync_all()?;
-    if !matches(path, original, project_root)? {
+    if !is_current(path, original, project_root)? {
         return Err(RepairError::Unsafe(
             "repair target changed before replacement".into(),
         ));

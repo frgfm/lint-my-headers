@@ -80,6 +80,11 @@ pub struct Options {
     pub respect_gitignore: Option<bool>,
     #[arg(long, value_enum, default_value = "text")]
     pub output_format: OutputFormat,
+    #[arg(
+        long,
+        help = "Print safe repair proposals as unified diffs without writing files (fix only)"
+    )]
+    pub diff: bool,
     /// Explicit files or folders; overrides configured paths.
     pub paths: Vec<PathBuf>,
 }
