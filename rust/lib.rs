@@ -107,26 +107,6 @@ fn map_files<T: Send, R: Send>(items: &mut [T], action: impl Fn(&mut T) -> R + S
     })
 }
 
-struct RunOutput {
-    result: CommandResult,
-    diff: Vec<u8>,
-}
-
-fn error_output(
-    command: &str,
-    config_path: Option<String>,
-    message: impl ToString,
-    path: Option<String>,
-) -> RunOutput {
-    let mut result = CommandResult::new(command);
-    result.config_path = config_path;
-    result.fail(message, path);
-    RunOutput {
-        result,
-        diff: Vec::new(),
-    }
-}
-
 // shortcut: non-Unicode paths stay unresolved, add byte quoting if users need them.
 fn patch_path(prefix: &str, relative: &Path) -> Option<String> {
     let relative = relative
@@ -185,41 +165,25 @@ fn unified_diff(
 ) -> Result<Vec<u8>, String> {
     let old: Vec<_> = before.split_inclusive(|byte| *byte == b'\n').collect();
     let new: Vec<_> = after.split_inclusive(|byte| *byte == b'\n').collect();
-    let mut prefix = 0;
-    while prefix < old.len() && prefix < new.len() && old[prefix] == new[prefix] {
-        prefix += 1;
-    }
-    let mut suffix = 0;
-    while suffix < old.len().saturating_sub(prefix)
-        && suffix < new.len().saturating_sub(prefix)
-        && old[old.len() - suffix - 1] == new[new.len() - suffix - 1]
-    {
-        suffix += 1;
-    }
+    let prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
+    let suffix = old[prefix..]
+        .iter()
+        .rev()
+        .zip(new[prefix..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
     if prefix == old.len() && prefix == new.len() {
         return Ok(Vec::new());
     }
 
-    let context_before = prefix.min(3);
     let context_after = suffix.min(3);
     let old_changed_end = old.len() - suffix;
     let new_changed_end = new.len() - suffix;
-    let old_hunk_start = prefix - context_before;
-    let new_hunk_start = old_hunk_start;
-    let old_hunk_end = old_changed_end + context_after;
-    let new_hunk_end = new_changed_end + context_after;
-    let old_count = old_hunk_end - old_hunk_start;
-    let new_count = new_hunk_end - new_hunk_start;
-    let old_start = if old_count == 0 {
-        old_hunk_start
-    } else {
-        old_hunk_start + 1
-    };
-    let new_start = if new_count == 0 {
-        new_hunk_start
-    } else {
-        new_hunk_start + 1
-    };
+    let start = prefix.saturating_sub(3);
+    let old_count = old_changed_end + context_after - start;
+    let new_count = new_changed_end + context_after - start;
+    let old_start = start + usize::from(old_count != 0);
+    let new_start = start + usize::from(new_count != 0);
 
     let path = absolute_path(path, cwd, canonical_cwd);
     let relative = pathdiff::diff_paths(&path, project_root).unwrap_or(path);
@@ -234,7 +198,7 @@ fn unified_diff(
         old_path, new_path
     )
     .into_bytes();
-    for line in &old[old_hunk_start..prefix] {
+    for line in &old[start..prefix] {
         append_patch_line(&mut diff, b' ', line);
     }
     for line in &old[prefix..old_changed_end] {
@@ -243,19 +207,24 @@ fn unified_diff(
     for line in &new[prefix..new_changed_end] {
         append_patch_line(&mut diff, b'+', line);
     }
-    for line in &old[old_changed_end..old_hunk_end] {
+    for line in &old[old_changed_end..old_changed_end + context_after] {
         append_patch_line(&mut diff, b' ', line);
     }
     Ok(diff)
 }
 
 pub fn run(settings: &Settings, command: &str, current_year: i32) -> CommandResult {
-    run_internal(settings, command, current_year, false).result
+    run_internal(settings, command, current_year, None)
 }
 
-fn run_internal(settings: &Settings, command: &str, current_year: i32, preview: bool) -> RunOutput {
+fn run_internal(
+    settings: &Settings,
+    command: &str,
+    current_year: i32,
+    mut diff: Option<&mut Vec<u8>>,
+) -> CommandResult {
     let mut result = CommandResult::new(command);
-    let mut diff = Vec::new();
+    let preview = diff.is_some();
     let cwd = std::env::current_dir().unwrap_or_default();
     let canonical_cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.clone());
     let diff_project_root = absolute_path(&settings.project_root, &cwd, &canonical_cwd);
@@ -360,69 +329,50 @@ fn run_internal(settings: &Settings, command: &str, current_year: i32, preview: 
             if diagnostic.code == "LMH001" && content.edit.is_none() {
                 return Ok(None);
             }
-            if preview {
-                let proposal = match (&snapshot.unsafe_reason, &content.edit) {
-                    (Some(reason), _) => Err(RepairError::Unsafe(reason.clone())),
-                    (None, Some(edit)) => {
-                        filesystem::is_current(path, snapshot, &settings.project_root)
-                            .map_err(RepairError::Io)
-                            .and_then(|current| {
-                                if current {
-                                    unified_diff(
-                                        path,
-                                        &diff_project_root,
-                                        &cwd,
-                                        &canonical_cwd,
-                                        &snapshot.bytes,
-                                        &edit.apply(&snapshot.bytes),
-                                    )
-                                    .map_err(RepairError::Unsafe)
-                                } else {
-                                    Err(RepairError::Unsafe(
-                                        "repair target changed before writing".into(),
-                                    ))
-                                }
-                            })
-                    }
-                    (None, None) => Err(RepairError::Unsafe(
-                        "copyright bytes cannot be repaired safely".into(),
-                    )),
-                };
-                match proposal {
-                    Ok(patch) if !patch.is_empty() => {
-                        let path = diagnostic.path.clone();
-                        content.diagnostic = None;
-                        return Ok(Some((path, patch)));
-                    }
-                    Ok(_) => return Ok(None),
-                    Err(RepairError::Unsafe(reason)) => {
-                        diagnostic.code = "LMH008".into();
-                        diagnostic.message = reason;
-                        diagnostic.fixable = false;
-                    }
-                    Err(RepairError::Io(error)) => {
-                        cancelled.store(true, Ordering::Relaxed);
-                        return Err((error.to_string(), Some(diagnostic.path.clone())));
-                    }
-                }
-                return Ok(None);
-            }
             let repair = match (&snapshot.unsafe_reason, &content.edit) {
                 (Some(reason), _) => Err(RepairError::Unsafe(reason.clone())),
                 (None, Some(edit)) => {
                     let bytes = edit.apply(&snapshot.bytes);
-                    filesystem::replace(path, snapshot, &bytes, &settings.project_root)
-                        .map(|()| snapshot.bytes = bytes)
+                    if preview {
+                        filesystem::is_current(path, snapshot, &settings.project_root)
+                            .map_err(RepairError::Io)
+                            .and_then(|current| {
+                                if !current {
+                                    return Err(RepairError::Unsafe(
+                                        "repair target changed before writing".into(),
+                                    ));
+                                }
+                                unified_diff(
+                                    path,
+                                    &diff_project_root,
+                                    &cwd,
+                                    &canonical_cwd,
+                                    &snapshot.bytes,
+                                    &bytes,
+                                )
+                                .map_err(RepairError::Unsafe)
+                            })
+                    } else {
+                        filesystem::replace(path, snapshot, &bytes, &settings.project_root).map(
+                            |()| {
+                                snapshot.bytes = bytes;
+                                Vec::new()
+                            },
+                        )
+                    }
                 }
                 (None, None) => Err(RepairError::Unsafe(
                     "copyright bytes cannot be repaired safely".into(),
                 )),
             };
             match repair {
-                Ok(()) => {
+                Ok(patch) => {
+                    if preview && patch.is_empty() {
+                        return Ok(None);
+                    }
                     let changed = diagnostic.path.clone();
                     content.diagnostic = None;
-                    return Ok(Some((changed, Vec::new())));
+                    return Ok(Some((changed, patch)));
                 }
                 Err(RepairError::Unsafe(reason)) => {
                     diagnostic.code = "LMH008".into();
@@ -441,7 +391,7 @@ fn run_internal(settings: &Settings, command: &str, current_year: i32, preview: 
         // Join all workers before reporting an error: in-flight writes may have completed.
         for outcome in repaired {
             match outcome {
-                Ok(Some((path, patch))) if preview => patches.push((path, patch)),
+                Ok(Some((_, patch))) if preview => patches.extend(patch),
                 Ok(Some((path, _))) => result.changed.push(path),
                 Err(e) => {
                     error.get_or_insert(e);
@@ -456,10 +406,8 @@ fn run_internal(settings: &Settings, command: &str, current_year: i32, preview: 
         if let Some(error) = error {
             return Err(error);
         }
-        if preview {
-            for (_, patch) in patches {
-                diff.extend_from_slice(&patch);
-            }
+        if let Some(diff) = &mut diff {
+            diff.extend(patches);
             return Ok(());
         }
         // Keep unsafe findings; otherwise report the files as they stand after repair.
@@ -482,7 +430,7 @@ fn run_internal(settings: &Settings, command: &str, current_year: i32, preview: 
     if let Err((message, path)) = outcome {
         result.fail(message, path);
     }
-    RunOutput { result, diff }
+    result
 }
 
 fn write_action_outputs(result: &CommandResult) -> io::Result<()> {
@@ -511,7 +459,12 @@ fn write_action_outputs(result: &CommandResult) -> io::Result<()> {
     )
 }
 
-fn render(result: &CommandResult, format: OutputFormat, languages: Option<&str>, diff: &[u8]) -> io::Result<()> {
+fn render(
+    result: &CommandResult,
+    format: OutputFormat,
+    languages: Option<&str>,
+    diff: &[u8],
+) -> io::Result<()> {
     let mut stdout = io::stdout().lock();
     if format == OutputFormat::Json {
         serde_json::to_writer(&mut stdout, result)?;
@@ -582,63 +535,67 @@ pub fn main_entry() -> i32 {
     } else {
         None
     };
-    let mut output = if let Some(error) = invalid_diff {
-        error_output(args.command.name(), explicit_config.clone(), error, None)
+    let resolved = if let Some(error) = invalid_diff {
+        Err(error.to_owned())
     } else {
-        match config::resolve(options) {
-            Ok(settings) => {
-                languages = Some(
-                    settings
-                        .languages
-                        .iter()
-                        .map(|language| format!("{language:?}").to_ascii_lowercase())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                );
-                let mut output = run_internal(
-                    &settings,
-                    args.command.name(),
-                    chrono::Local::now().year(),
-                    options.diff,
-                );
-                let result = &mut output.result;
-                if result.expected_header.is_none() && result.error.is_some() {
-                    result.config_path = explicit_config.clone();
-                    if let Some(error) = &mut result.error
-                        && error.message.starts_with("Unable to locate")
-                    {
-                        error.path = explicit_config.clone();
-                    }
+        config::resolve(options)
+    };
+    let mut diff = Vec::new();
+    let mut result = match resolved {
+        Ok(settings) => {
+            languages = Some(
+                settings
+                    .languages
+                    .iter()
+                    .map(|language| format!("{language:?}").to_ascii_lowercase())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+            let mut result = run_internal(
+                &settings,
+                args.command.name(),
+                chrono::Local::now().year(),
+                options.diff.then_some(&mut diff),
+            );
+            if result.expected_header.is_none() && result.error.is_some() {
+                result.config_path = explicit_config.clone();
+                if let Some(error) = &mut result.error
+                    && error.message.starts_with("Unable to locate")
+                {
+                    error.path = explicit_config.clone();
                 }
-                output
             }
-            Err(error) => {
-                let path = if error.starts_with("Invalid configuration path:") {
-                    explicit_config.clone()
-                } else {
-                    None
-                };
-                error_output(args.command.name(), explicit_config.clone(), error, path)
-            }
+            result
+        }
+        Err(error) => {
+            let mut result = CommandResult::new(args.command.name());
+            result.config_path = explicit_config.clone();
+            let path = if error.starts_with("Invalid configuration path:") {
+                explicit_config.clone()
+            } else {
+                None
+            };
+            result.fail(error, path);
+            result
         }
     };
-    if let Err(error) = write_action_outputs(&output.result) {
-        output.diff.clear();
-        output.result.fail(
+    if let Err(error) = write_action_outputs(&result) {
+        diff.clear();
+        result.fail(
             format!("Unable to write GitHub Action outputs: {error}"),
             None,
         );
     }
-    if let Err(error) = render(&output.result, options.output_format, languages.as_deref(), &output.diff) {
+    if let Err(error) = render(&result, options.output_format, languages.as_deref(), &diff) {
         if error.kind() != io::ErrorKind::BrokenPipe {
             eprintln!("error: {error}");
         }
         return 2;
     }
-    if !output.diff.is_empty() && output.result.error.is_none() {
+    if !diff.is_empty() && result.error.is_none() {
         1
     } else {
-        output.result.exit_code()
+        result.exit_code()
     }
 }
 

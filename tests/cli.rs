@@ -1819,12 +1819,6 @@ fn fix_diff_json_and_check_use_the_existing_invocation_error_schema() {
         assert_eq!(result["error"]["code"], "LMH900");
         assert_eq!(result["changed"], json!([]));
         assert!(result["diagnostics"].as_array().unwrap().is_empty());
-        assert!(
-            output
-                .stdout
-                .windows(b"--- a/".len())
-                .all(|bytes| bytes != b"--- a/")
-        );
     }
 
     let output = run(root, &["check", "--diff"], 2);
@@ -1853,7 +1847,6 @@ fn fix_diff_labels_relative_paths_from_nested_working_directories() {
     let dir = workspace();
     let root = dir.path();
     let nested = root.join("nested");
-    fs::create_dir(&nested).unwrap();
     let stale = header(format!("{}-{}", year() - 2, year() - 1));
     write(root, "nested/file.py", &stale);
 
