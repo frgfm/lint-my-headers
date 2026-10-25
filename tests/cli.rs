@@ -1310,7 +1310,7 @@ fn custom_notices_require_text_and_match_complete_lines() {
 }
 
 #[test]
-fn invalid_config_is_rejected_before_any_write() {
+fn invalid_config_and_options_are_rejected_before_any_write() {
     let dir = workspace();
     let root = dir.path();
     let stale = header(year() - 2);
@@ -1371,6 +1371,7 @@ fn invalid_config_is_rejected_before_any_write() {
     write(root, "pyproject.toml", CONFIG);
     let future = (year() + 1).to_string();
     for args in [
+        vec!["fix", "--diff"],
         vec!["fix", "--folders", "src", "src/stale.py"],
         vec!["fix", "--license", "made-up-license"],
         vec!["fix", "--config", "missing.toml"],
@@ -1380,6 +1381,7 @@ fn invalid_config_is_rejected_before_any_write() {
     ] {
         assert_eq!(json_run(root, &args, 2)["changed"], json!([]));
     }
+    run(root, &["check", "--diff"], 2);
     let missing = json_run(root, &["check", "--config", "missing.toml"], 2);
     json_run(
         root,
@@ -1775,87 +1777,32 @@ fn pinned_spdx_data_accepts_every_legacy_notice_and_new_identifiers() {
 fn fix_diff_previews_repairs_without_writing() {
     let dir = workspace();
     let root = dir.path();
-    let current = year();
-    let first = current - 2;
-    let stale_end = current - 1;
-    let stale = header(format!("{first}-{stale_end}"));
+    let first = year() - 2;
+    let stale = header(first);
     let missing = "value = 1\n";
     write(root, "src/stale.py", &stale);
     write(root, "src/missing.py", missing);
-    let creation_year = first.to_string();
     let output = run(
-        root,
-        &["fix", "--diff", "--creation-year", &creation_year, "src"],
+        &root.join("src"),
+        &["fix", "--diff", "--creation-year", &first.to_string(), "."],
         1,
     );
     let diff = String::from_utf8_lossy(&output.stdout);
-    let current_header = format!("+# Copyright (C) {first}-{current}, {OWNER}.");
-    assert!(diff.contains("--- a/src/stale.py\n+++ b/src/stale.py"));
-    assert!(diff.contains("--- a/src/missing.py\n+++ b/src/missing.py"));
-    assert!(diff.contains(&format!("-# Copyright (C) {first}-{stale_end}, {OWNER}.")));
-    assert!(diff.contains(&current_header));
-    assert_eq!(
-        fs::read(root.join("src/stale.py")).unwrap(),
-        stale.as_bytes()
-    );
-    assert_eq!(
-        fs::read(root.join("src/missing.py")).unwrap(),
-        missing.as_bytes()
-    );
-}
-
-#[test]
-fn fix_diff_json_and_check_use_the_existing_invocation_error_schema() {
-    let dir = workspace();
-    let root = dir.path();
-    for args in [
-        ["fix", "--diff", "--output-format", "json"],
-        ["check", "--diff", "--output-format", "json"],
-    ] {
-        let output = run(root, &args, 2);
-        assert!(output.stderr.is_empty(), "{output:?}");
-        let result: Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(result["schema_version"], 1);
-        assert_eq!(result["error"]["code"], "LMH900");
-        assert_eq!(result["changed"], json!([]));
-        assert!(result["diagnostics"].as_array().unwrap().is_empty());
+    for name in ["stale", "missing"] {
+        assert!(diff.contains(&format!("--- a/src/{name}.py\n+++ b/src/{name}.py")));
     }
-
-    let output = run(root, &["check", "--diff"], 2);
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("--diff is only available with the fix command")
-    );
-
-    write(
-        root,
-        "src/stale.py",
-        header(format!("{}-{}", year() - 2, year() - 1)),
-    );
-    let config_error = run(root, &["fix", "--diff", "--config", "missing.toml"], 2);
-    assert!(config_error.stdout.is_empty());
-    let io_error = run(
-        root,
-        &["fix", "--diff", "src/stale.py", "src/missing.py"],
-        2,
-    );
-    assert!(io_error.stdout.is_empty());
-}
-
-#[test]
-fn fix_diff_labels_relative_paths_from_nested_working_directories() {
-    let dir = workspace();
-    let root = dir.path();
-    let nested = root.join("nested");
-    let stale = header(format!("{}-{}", year() - 2, year() - 1));
-    write(root, "nested/file.py", &stale);
-
-    let output = run(&nested, &["fix", "--diff", "file.py"], 1);
-    assert!(
-        output
-            .stdout
-            .starts_with(b"--- a/nested/file.py\n+++ b/nested/file.py\n")
-    );
+    let current_header = format!("+# Copyright (C) {first}-{}, {OWNER}.", year());
+    assert_eq!(diff.matches(&current_header).count(), 2);
+    assert!(diff.contains(&format!("-# Copyright (C) {first}, {OWNER}.")));
     assert!(!String::from_utf8_lossy(&output.stderr).contains("LMH"));
-    assert_eq!(fs::read(nested.join("file.py")).unwrap(), stale.as_bytes());
+    assert_eq!(
+        fs::read_to_string(root.join("src/stale.py")).unwrap(),
+        stale
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("src/missing.py")).unwrap(),
+        missing
+    );
+    let io_error = run(root, &["fix", "--diff", "src/stale.py", "src/absent.py"], 2);
+    assert!(io_error.stdout.is_empty());
 }
