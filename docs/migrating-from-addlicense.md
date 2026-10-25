@@ -11,19 +11,15 @@ and year policy; `check` never writes files.
 | addlicense | Lint My Headers |
 | --- | --- |
 | `-c "Owner"` | `owner = "Owner"` in configuration |
-| `-l apache` | `license = "Apache-2.0"`, using an SPDX identifier |
+| `-l apache` | `license = "Apache-2.0"` (SPDX identifier); check notice compatibility below |
 | `-ignore` glob | Configured `paths`, exact `ignore-files` names, or `ignore-folders` subtrees ([details](configuration.md)) |
 
-Do not copy `addlicense -y` to `starting-year`: that setting is the earliest
-accepted year, not the file's creation year. To insert a missing header, declare
-its actual first copyright year; the policy must already supply the owner and notice:
+The `license` setting requires a project-root `LICENSE` file. Existing addlicense
+boilerplate may not match LMH's notices. To retain it, copy the notice prose unchanged
+(preserve blank lines; omit copyright and comment markers) into `NOTICE.txt`.
+Set `license-notice = "NOTICE.txt"` instead of `license`, and check a representative
+existing file before switching CI.
 
-```shell
-lmh fix --creation-year 2024 src/new_file.py
-lmh check src/new_file.py
-git diff
-```
-
-Run separately for files with different creation years. Without `creation-year`,
-`fix` leaves missing headers for review. Existing eligible headers can have their
-stale end year refreshed with `lmh fix`.
+Do not copy `addlicense -y` to `starting-year`: that is an earliest accepted year,
+not the file's creation year. For missing headers, declare their actual
+`creation-year` and follow [the insertion guide](getting-started.md#insert-a-missing-header).
