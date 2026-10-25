@@ -14,7 +14,7 @@ Keep every PR's net diff to the smallest complete change. Reuse fixtures and tes
 
 `check` must never write. `fix` may refresh one recognized stale end year or insert a missing header only with an explicitly declared owner, notice, and creation year. Preserve existing source bytes and mode. Refuse ambiguous, symlinked, reparse-point, multi-link, or concurrently changed targets. Never infer an owner, license, starting year, creation year, or legal conclusion.
 
-The unreleased text-only `fix --diff` preview uses the same repair eligibility and guarded snapshots as `fix`; it prints proposed unified diffs without writing files. Keep JSON schema version 1 unchanged.
+The unreleased text-only `fix --diff` preview uses the same repair eligibility and guarded snapshots as `fix`; it prints proposed unified diffs without writing source files. Keep JSON schema version 1 unchanged.
 
 Run before handoff:
 

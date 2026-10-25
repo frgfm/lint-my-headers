@@ -111,7 +111,10 @@ fn map_files<T: Send, R: Send>(items: &mut [T], action: impl Fn(&mut T) -> R + S
 fn patch_path(prefix: &str, relative: &Path) -> Option<String> {
     let relative = relative
         .components()
-        .map(|part| part.as_os_str().to_str())
+        .map(|part| match part {
+            Component::Normal(name) => name.to_str(),
+            _ => None,
+        })
         .collect::<Option<Vec<_>>>()?
         .join("/");
     let path = format!("{prefix}/{relative}");
@@ -620,6 +623,34 @@ mod tests {
         use std::os::unix::ffi::OsStringExt;
         let path = PathBuf::from(std::ffi::OsString::from_vec(b"bad\xff.py".to_vec()));
         assert!(patch_path("a", &path).is_none());
+    }
+
+    #[test]
+    fn diff_paths_quote_names_and_refuse_parent_or_root_components() {
+        for (path, expected) in [
+            ("../outside.py", None),
+            ("/outside.py", None),
+            ("quote\"\n.py", Some("\"a/quote\\\"\\n.py\"")),
+        ] {
+            assert_eq!(patch_path("a", Path::new(path)).as_deref(), expected);
+        }
+    }
+
+    #[test]
+    fn diff_hunks_preserve_unterminated_lines() {
+        let root = std::env::current_dir().unwrap();
+        let path = root.join("x.py");
+        let patch = unified_diff(&path, &root, &root, &root, b"old", b"new").unwrap();
+        assert_eq!(
+            patch,
+            b"--- a/x.py\n\
+              +++ b/x.py\n\
+              @@ -1,1 +1,1 @@\n\
+              -old\n\
+              \\ No newline at end of file\n\
+              +new\n\
+              \\ No newline at end of file\n"
+        );
     }
 
     #[test]
