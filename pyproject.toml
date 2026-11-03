@@ -57,7 +57,7 @@ docs = ["zensical==0.0.67"]
 quality = [
     "ruff==0.17.3",
     "ty==0.0.95",
-    "prek==0.5.7",
+    "prek==0.5.9",
 ]
 
 [tool.ruff]
