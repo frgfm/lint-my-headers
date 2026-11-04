@@ -319,76 +319,120 @@ fn run_internal(
             return Ok(());
         }
         let cancelled = AtomicBool::new(false);
-        let repaired = map_files(&mut files, |((path, _), (snapshot, content))| {
-            if cancelled.load(Ordering::Relaxed) {
-                return Ok(None);
+        // Stage a batch of repairs, flush once, then publish it; a preview needs one pass.
+        let mut repaired = Vec::new();
+        let batch_size = if filesystem::DEFERRED {
+            1024
+        } else {
+            files.len().max(1)
+        };
+        for batch in files.chunks_mut(batch_size) {
+            if repaired.iter().any(Result::is_err) {
+                break;
             }
-            let Some(diagnostic) = &mut content.diagnostic else {
-                return Ok(None);
-            };
-            if !matches!(diagnostic.code.as_str(), "LMH001" | "LMH004") {
-                return Ok(None);
-            }
-            if diagnostic.code == "LMH001" && content.edit.is_none() {
-                return Ok(None);
-            }
-            let repair = match (&snapshot.unsafe_reason, &content.edit) {
-                (Some(reason), _) => Err(RepairError::Unsafe(reason.clone())),
-                (None, Some(edit)) => {
-                    let bytes = edit.apply(&snapshot.bytes);
-                    if preview {
-                        filesystem::is_current(path, snapshot, &settings.project_root)
-                            .map_err(RepairError::Io)
-                            .and_then(|current| {
-                                if !current {
-                                    return Err(RepairError::Unsafe(
-                                        "repair target changed before writing".into(),
-                                    ));
-                                }
-                                unified_diff(
-                                    path,
-                                    &diff_project_root,
-                                    &cwd,
-                                    &canonical_cwd,
-                                    &snapshot.bytes,
-                                    &bytes,
-                                )
-                                .map_err(RepairError::Unsafe)
-                            })
-                    } else {
-                        filesystem::replace(path, snapshot, &bytes, &settings.project_root).map(
-                            |()| {
-                                snapshot.bytes = bytes;
-                                Vec::new()
-                            },
-                        )
+            for commit in [false, true] {
+                if commit {
+                    if preview || !filesystem::DEFERRED {
+                        break;
+                    }
+                    // Staged repairs of a failed pass still publish, as completed writes did.
+                    cancelled.store(false, Ordering::Relaxed);
+                    if let Some(staged) =
+                        batch.iter().find_map(|(_, (file, _))| file.staged.as_ref())
+                        && let Err(error) = filesystem::barrier(staged)
+                    {
+                        cancelled.store(true, Ordering::Relaxed);
+                        repaired.push(Err((error.to_string(), None)));
                     }
                 }
-                (None, None) => Err(RepairError::Unsafe(
-                    "copyright bytes cannot be repaired safely".into(),
-                )),
-            };
-            match repair {
-                Ok(patch) => {
-                    if preview && patch.is_empty() {
+                repaired.extend(map_files(batch, |((path, _), (snapshot, content))| {
+                    if cancelled.load(Ordering::Relaxed) {
                         return Ok(None);
                     }
-                    let changed = diagnostic.path.clone();
-                    content.diagnostic = None;
-                    return Ok(Some((changed, patch)));
-                }
-                Err(RepairError::Unsafe(reason)) => {
-                    diagnostic.code = "LMH008".into();
-                    diagnostic.message = reason;
-                    diagnostic.fixable = false;
-                }
-                Err(RepairError::Io(error)) => {
-                    cancelled.store(true, Ordering::Relaxed);
-                    return Err((error.to_string(), Some(diagnostic.path.clone())));
-                }
+                    let Some(diagnostic) = &mut content.diagnostic else {
+                        return Ok(None);
+                    };
+                    if !matches!(diagnostic.code.as_str(), "LMH001" | "LMH004") {
+                        return Ok(None);
+                    }
+                    if diagnostic.code == "LMH001" && content.edit.is_none() {
+                        return Ok(None);
+                    }
+                    let repair = match (&snapshot.unsafe_reason, &content.edit) {
+                        (Some(reason), _) => Err(RepairError::Unsafe(reason.clone())),
+                        (None, Some(edit)) => {
+                            let bytes = edit.apply(&snapshot.bytes);
+                            if preview {
+                                filesystem::is_current(path, snapshot, &settings.project_root)
+                                    .map_err(RepairError::Io)
+                                    .and_then(|current| {
+                                        if !current {
+                                            return Err(RepairError::Unsafe(
+                                                "repair target changed before writing".into(),
+                                            ));
+                                        }
+                                        unified_diff(
+                                            path,
+                                            &diff_project_root,
+                                            &cwd,
+                                            &canonical_cwd,
+                                            &snapshot.bytes,
+                                            &bytes,
+                                        )
+                                        .map_err(RepairError::Unsafe)
+                                    })
+                            } else if !filesystem::DEFERRED {
+                                filesystem::replace(path, snapshot, &bytes, &settings.project_root)
+                                    .map(|()| {
+                                        snapshot.bytes = bytes;
+                                        Vec::new()
+                                    })
+                            } else if !commit {
+                                filesystem::stage(path, snapshot, &bytes, &settings.project_root)
+                                    .map(|staged| {
+                                        snapshot.staged = staged;
+                                        Vec::new()
+                                    })
+                            } else if let Some(staged) = snapshot.staged.take() {
+                                filesystem::commit(path, snapshot, staged, &settings.project_root)
+                                    .map(|()| {
+                                        snapshot.bytes = bytes;
+                                        Vec::new()
+                                    })
+                            } else {
+                                return Ok(None);
+                            }
+                        }
+                        (None, None) => Err(RepairError::Unsafe(
+                            "copyright bytes cannot be repaired safely".into(),
+                        )),
+                    };
+                    match repair {
+                        Ok(patch) => {
+                            if !preview && !commit && snapshot.staged.is_some() {
+                                return Ok(None);
+                            }
+                            if preview && patch.is_empty() {
+                                return Ok(None);
+                            }
+                            let changed = diagnostic.path.clone();
+                            content.diagnostic = None;
+                            return Ok(Some((changed, patch)));
+                        }
+                        Err(RepairError::Unsafe(reason)) => {
+                            diagnostic.code = "LMH008".into();
+                            diagnostic.message = reason;
+                            diagnostic.fixable = false;
+                        }
+                        Err(RepairError::Io(error)) => {
+                            cancelled.store(true, Ordering::Relaxed);
+                            return Err((error.to_string(), Some(diagnostic.path.clone())));
+                        }
+                    }
+                    Ok(None)
+                }));
             }
-            Ok(None)
-        });
+        }
         let mut error = None;
         let mut patches = Vec::new();
         // Join all workers before reporting an error: in-flight writes may have completed.
