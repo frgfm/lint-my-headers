@@ -6,6 +6,7 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
+use tempfile::TempPath;
 
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
@@ -253,6 +254,7 @@ struct Identity {
 pub struct Snapshot {
     pub bytes: Vec<u8>,
     pub unsafe_reason: Option<String>,
+    pub staged: Option<TempPath>,
     identity: Option<Identity>,
 }
 
@@ -351,6 +353,7 @@ pub fn read(path: &Path, project_root: &Path) -> io::Result<Snapshot> {
     Ok(Snapshot {
         bytes,
         unsafe_reason,
+        staged: None,
         identity,
     })
 }
@@ -388,12 +391,47 @@ pub(crate) fn is_current(
         }))
 }
 
-pub fn replace(
+// std's sync_all is a full drive flush on macOS, ~3 ms per file; fsync(2) is not.
+#[cfg(target_os = "macos")]
+fn sync_staged(file: &File) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+    unsafe extern "C" {
+        fn fsync(fd: i32) -> i32;
+    }
+    // The descriptor is open for the whole call.
+    if unsafe { fsync(file.as_raw_fd()) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn sync_staged(file: &File) -> io::Result<()> {
+    file.sync_all()
+}
+
+/// Whether repairs are staged, flushed once by `barrier`, then committed.
+pub const DEFERRED: bool = cfg!(target_os = "macos");
+
+/// One drive flush that makes every file passed to `sync_staged` durable on macOS.
+pub fn barrier(staged: &Path) -> io::Result<()> {
+    if cfg!(target_os = "macos") {
+        // A clean file's full sync is a no-op, so dirty a scratch file to force the flush.
+        let mut scratch = tempfile::tempfile_in(staged.parent().unwrap_or(Path::new(".")))?;
+        scratch.write_all(&[0])?;
+        scratch.sync_all()?;
+    }
+    Ok(())
+}
+
+/// Writes the repair beside `path`; `commit` publishes it. `None` means nothing to write.
+pub fn stage(
     path: &Path,
     original: &Snapshot,
     repaired: &[u8],
     project_root: &Path,
-) -> Result<(), RepairError> {
+) -> Result<Option<TempPath>, RepairError> {
     let identity = original.identity.as_ref().ok_or_else(|| {
         RepairError::Unsafe(
             original
@@ -408,7 +446,7 @@ pub fn replace(
         ));
     }
     if original.bytes == repaired {
-        return Ok(());
+        return Ok(None);
     }
     let parent = path
         .parent()
@@ -421,16 +459,39 @@ pub fn replace(
     temporary
         .as_file()
         .set_permissions(identity.permissions.clone())?;
-    temporary.as_file().sync_all()?;
+    sync_staged(temporary.as_file())?;
+    Ok(Some(temporary.into_temp_path()))
+}
+
+pub fn commit(
+    path: &Path,
+    original: &Snapshot,
+    mut staged: TempPath,
+    project_root: &Path,
+) -> Result<(), RepairError> {
     if !is_current(path, original, project_root)? {
         return Err(RepairError::Unsafe(
             "repair target changed before replacement".into(),
         ));
     }
     // std supports replacing an open Windows target; tempfile::persist does not.
-    fs::rename(temporary.path(), path)?;
-    temporary.disable_cleanup(true);
+    fs::rename(&staged, path)?;
+    staged.disable_cleanup(true);
     Ok(())
+}
+
+/// Stage and publish one repair at once, for platforms without a cheap `sync_staged`.
+pub fn replace(
+    path: &Path,
+    original: &Snapshot,
+    repaired: &[u8],
+    project_root: &Path,
+) -> Result<(), RepairError> {
+    let Some(staged) = stage(path, original, repaired, project_root)? else {
+        return Ok(());
+    };
+    barrier(&staged)?;
+    commit(path, original, staged, project_root)
 }
 
 #[cfg(test)]
@@ -531,6 +592,26 @@ mod tests {
         settings.paths = vec![root.path().to_path_buf()];
         fs::write(root.path().join(".gitignore"), "[z-a]\n").unwrap();
         assert!(discover(&settings).is_err());
+    }
+
+    #[test]
+    fn staged_repair_leaves_target_untouched_until_commit() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("source.py");
+        fs::write(&path, b"old").unwrap();
+        let snapshot = read(&path, root.path()).unwrap();
+        let staged = stage(&path, &snapshot, b"new", root.path())
+            .unwrap()
+            .unwrap();
+        barrier(&staged).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"old");
+        commit(&path, &snapshot, staged, root.path()).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+        assert!(
+            stage(&path, &snapshot, b"new", root.path()).is_err(),
+            "a stale snapshot must not stage"
+        );
     }
 
     #[test]
